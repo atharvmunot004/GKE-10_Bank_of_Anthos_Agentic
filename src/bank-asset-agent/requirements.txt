@@ -1,0 +1,9 @@
+grpcio
+grpcio-tools
+protobuf
+PyJWT
+cryptography
+google-cloud-bigquery
+requests
+psycopg2-binary
+sqlalchemy

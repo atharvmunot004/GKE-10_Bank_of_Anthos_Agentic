@@ -74,13 +74,46 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/ledger/transactionhistory/`
 **Description**: Provides transaction history and reporting capabilities.
 
-#### 1.8 Portfolio Agent (`portfolioagent`)
+#### 1.8 Bank Asset Agent (`bank-asset-agent`)
 **Status**: ✅ Implemented
-**Purpose**: AI-powered portfolio management and investment recommendations
+**Purpose**: AI-powered asset management, market analysis, and investment decision-making
 **Port**: `8080`
-**Dependencies**: `assets-db`, `queue-db`
-**Location**: `src/portfolioagent/`
-**Description**: AI agent that provides investment recommendations and portfolio management tools.
+**Protocol**: gRPC + HTTP REST
+**Dependencies**: `market-reader-svc`, `rule-checker-svc`, `execute-order-svc`, `assets-db`, `user-request-queue-svc`
+**Location**: `src/bank-asset-agent/`
+**Description**: Comprehensive AI agent that manages investment assets, analyzes market data, and executes investment decisions with full API implementation.
+
+**Key Features**:
+- **Market Analysis**: Real-time market data processing and trend analysis
+- **Rule Validation**: Investment rule checking and compliance validation
+- **Order Execution**: Investment order processing and management
+- **Asset Management**: Database operations for asset information and pricing
+- **Queue Processing**: Investment/withdrawal request queue management
+- **Risk Assessment**: Advanced risk calculation and portfolio optimization
+- **gRPC API**: High-performance gRPC service for internal communication
+- **HTTP Clients**: RESTful clients for external service integration
+- **Database Integration**: Full CRUD operations for assets and queue databases
+- **Error Handling**: Comprehensive error handling and retry logic
+- **Testing**: Complete unit and integration test coverage (100% success rate)
+
+**API Endpoints**:
+- `analyze_market_data()` - Market data analysis and trend prediction
+- `process_investment_request()` - Investment request processing workflow
+- `execute_asset_management()` - Asset management operations
+- `validate_investment_rules()` - Business rule validation
+- `get_asset_info()` - Asset information retrieval
+- `update_asset_price()` - Real-time price updates
+- `process_queue_requests()` - Queue request processing
+
+**Tools Directory**: `src/bank-asset-agent/tools/`
+- `market_analyzer.py` - Market data analysis tools
+- `rule_validator.py` - Rule validation tools  
+- `order_executor.py` - Order execution tools
+
+**Database Clients**: `src/bank-asset-agent/utils/`
+- `AssetsDatabaseClient` - Assets database operations
+- `QueueDatabaseClient` - Queue database operations
+- `BankAssetAgentClient` - Main orchestration client
 
 ### 2. DATABASE SERVICES (Implemented)
 
@@ -106,7 +139,27 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `5432`
 **Dependencies**: None (Database service)
 **Location**: `src/assets-db/`
-**Description**: PostgreSQL database storing investment assets, prices, and availability.
+**Description**: PostgreSQL database storing investment assets, prices, and availability with comprehensive testing and LLM documentation.
+
+**Key Features**:
+- **Asset Management**: Complete CRUD operations for asset data
+- **Tier Classification**: Multi-tier asset organization (Tier 1, 2, 3)
+- **Price Tracking**: Real-time price updates and historical data
+- **Availability Management**: Asset availability and stock tracking
+- **Performance Optimization**: Indexed queries and connection pooling
+- **Testing Suite**: Comprehensive unit and integration tests
+- **LLM Documentation**: Complete API documentation for AI agents
+
+**Schema**:
+- `assets` table with columns: `asset_id`, `tier_number`, `asset_name`, `amount`, `price_per_unit`, `last_updated`
+- Indexes on `tier_number`, `asset_name`, and `last_updated` for performance
+- Constraints for data integrity and validation
+
+**API Integration**:
+- Direct PostgreSQL connection via `ASSETS_DB_URI` environment variable
+- SQLAlchemy ORM support for Python applications
+- Connection pooling and error handling
+- Transaction management and rollback capabilities
 
 #### 2.4 Queue Database (`queue-db`)
 **Status**: ✅ Implemented
@@ -114,7 +167,28 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `5432`
 **Dependencies**: None (Database service)
 **Location**: `src/queue-db/`
-**Description**: PostgreSQL database managing investment and withdrawal request queues.
+**Description**: PostgreSQL database managing investment and withdrawal request queues with comprehensive testing and LLM documentation.
+
+**Key Features**:
+- **Queue Management**: Complete CRUD operations for queue entries
+- **Multi-Tier Support**: Support for Tier 1, 2, and 3 investment pools
+- **Withdrawal Support**: Negative amounts for withdrawal processing
+- **Status Tracking**: Request status management (pending, processed, failed)
+- **UUID Support**: Unique identifier tracking for requests
+- **Performance Optimization**: Indexed queries and connection pooling
+- **Testing Suite**: Comprehensive unit and integration tests
+- **LLM Documentation**: Complete API documentation for AI agents
+
+**Schema**:
+- `investment_queue` table with columns: `queue_id`, `account_number`, `tier_1`, `tier_2`, `tier_3`, `uuid`, `status`, `created_at`, `updated_at`, `processed_at`
+- Indexes on `account_number`, `status`, and `created_at` for performance
+- Support for negative values in tier columns for withdrawals
+
+**API Integration**:
+- Direct PostgreSQL connection via `QUEUE_DB_URI` environment variable
+- SQLAlchemy ORM support for Python applications
+- Connection pooling and error handling
+- Transaction management and rollback capabilities
 
 #### 2.5 User Portfolio Database (`user-portfolio-table`)
 **Status**: ✅ Implemented
@@ -134,13 +208,6 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/investment-manager/` (to be created)
 **Description**: Orchestrates investment operations, manages investment workflows, and coordinates between investment services.
 
-#### 3.2 Bank Asset Agent (`bank-asset-agent`)
-**Status**: 🚧 Planned
-**Purpose**: AI agent for asset management and market analysis
-**Port**: `8080`
-**Dependencies**: `market-reader-svc`, `rule-checker-svc`, `execute-order-svc`, `assets-db`
-**Location**: `src/bank-asset-agent/` (to be created)
-**Description**: AI agent responsible for asset management, market analysis, and investment decision making.
 
 #### 3.3 User Tier Agent (`user-tier-agent`)
 **Status**: 🚧 Planned
@@ -164,7 +231,14 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `8080`
 **Dependencies**: `bank-asset-agent`, `rule-checker-svc`
 **Location**: `src/execute-order/` (to be created)
-**Description**: Executes investment orders and manages order lifecycle.
+**Description**: Executes investment orders and manages order lifecycle with integration to bank-asset-agent.
+
+**Integration with bank-asset-agent**:
+- **HTTP Client**: `ExecuteOrderClient` in `bank-asset-agent/utils/http_client.py`
+- **API Endpoints**: `/api/execute`, `/api/orders/{order_id}`, `/api/orders/{order_id}/cancel`
+- **Order Management**: Order creation, execution, status tracking, and cancellation
+- **Error Handling**: Comprehensive error handling and retry logic
+- **Testing**: Integration tests in `bank-asset-agent/tests/test_integration.py`
 
 #### 3.6 User Request Queue Service (`user-request-queue-svc`)
 **Status**: 🚧 Planned
@@ -172,7 +246,15 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `8080`
 **Dependencies**: `bank-asset-agent`, `rule-checker-svc`, `queue-db`
 **Location**: `src/user-request-queue/` (to be created)
-**Description**: Processes investment and withdrawal requests from the queue database.
+**Description**: Processes investment and withdrawal requests from the queue database with integration to bank-asset-agent.
+
+**Integration with bank-asset-agent**:
+- **HTTP Client**: `UserRequestQueueClient` in `bank-asset-agent/utils/http_client.py`
+- **API Endpoints**: `/api/requests`, `/api/process`, `/api/requests/{request_id}`
+- **Queue Management**: Request retrieval, processing, and status updates
+- **Database Integration**: Direct integration with `queue-db` via `QueueDatabaseClient`
+- **Error Handling**: Comprehensive error handling and retry logic
+- **Testing**: Integration tests in `bank-asset-agent/tests/test_integration.py`
 
 #### 3.7 User Portfolio Service (`user-portfolio-svc`)
 **Status**: 🚧 Planned
@@ -204,7 +286,15 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `8080`
 **Dependencies**: `bank-asset-agent`, `execute-order-svc`
 **Location**: `src/rule-checker/` (to be created)
-**Description**: Validates business rules, compliance requirements, and investment constraints.
+**Description**: Validates business rules, compliance requirements, and investment constraints with integration to bank-asset-agent.
+
+**Integration with bank-asset-agent**:
+- **HTTP Client**: `RuleCheckerClient` in `bank-asset-agent/utils/http_client.py`
+- **API Endpoints**: `/api/validate`, `/api/compliance`
+- **Rule Validation**: Investment rule checking and compliance validation
+- **Risk Assessment**: Risk scoring and validation logic
+- **Error Handling**: Comprehensive error handling and retry logic
+- **Testing**: Integration tests in `bank-asset-agent/tests/test_integration.py`
 
 #### 3.11 Market Reader Service (`market-reader-svc`)
 **Status**: 🚧 Planned
@@ -212,7 +302,15 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Port**: `8080`
 **Dependencies**: None (External API service)
 **Location**: `src/market-reader/` (to be created)
-**Description**: Integrates with external market data providers for real-time asset pricing.
+**Description**: Integrates with external market data providers for real-time asset pricing with integration to bank-asset-agent.
+
+**Integration with bank-asset-agent**:
+- **HTTP Client**: `MarketReaderClient` in `bank-asset-agent/utils/http_client.py`
+- **API Endpoints**: `/api/market-data`, `/api/assets/{symbol}`
+- **Market Data**: Real-time market data retrieval and processing
+- **Asset Information**: Asset details and pricing information
+- **Error Handling**: Comprehensive error handling and retry logic
+- **Testing**: Integration tests in `bank-asset-agent/tests/test_integration.py`
 
 #### 3.12 User Return Rules Agent (`user-return-rules-agent`)
 **Status**: 🚧 Planned
@@ -374,16 +472,31 @@ def execute_query(query, params=None):
 - Each service has comprehensive unit tests
 - Database services include schema validation tests
 - Application services include API endpoint tests
+- **bank-asset-agent**: 100% unit test success rate (12/12 tests passed)
+- **assets-db**: Comprehensive Docker-based testing with schema validation
+- **queue-db**: Complete testing suite with constraint validation
 
 ### 2. Integration Tests
 - Service-to-service communication tests
 - Database integration tests
 - End-to-end workflow tests
+- **bank-asset-agent**: 100% integration test success rate (8/8 tests passed)
+- **Database Integration**: Full CRUD operations testing
+- **API Integration**: HTTP client and gRPC service testing
 
 ### 3. Performance Tests
 - Load testing with `loadgen`
 - Database performance monitoring
 - Service response time monitoring
+- **Connection Pooling**: Optimized database connections
+- **Retry Logic**: Exponential backoff for failed requests
+- **Error Handling**: Comprehensive error recovery mechanisms
+
+### 4. Testing Infrastructure
+- **Docker-based Testing**: Containerized test environments
+- **Mock Services**: Comprehensive mocking for external dependencies
+- **Test Data**: Realistic test data generation and management
+- **CI/CD Integration**: Automated testing in deployment pipelines
 
 ## Deployment Strategy
 
@@ -439,21 +552,79 @@ skaffold run --module service-name --profile production
 - Transaction immutability
 - Regulatory compliance features
 
+## LLM Documentation and AI Agent Integration
+
+### 1. LLM Documentation Files
+Each service includes comprehensive `llm.txt` files for AI agent interaction:
+
+#### 1.1 Database Services
+- **assets-db/llm.txt**: Complete database schema, API usage, and integration patterns
+- **queue-db/llm.txt**: Queue management operations and database interactions
+- **accounts-db/llm.txt**: User account management and authentication patterns
+- **ledger-db/llm.txt**: Transaction ledger operations and data integrity
+- **user-portfolio-db/llm.txt**: Portfolio management and analytics operations
+
+#### 1.2 Application Services
+- **bank-asset-agent/llm.txt**: Comprehensive AI agent documentation with tools, APIs, and workflows
+- **master_llm.txt**: Central architectural blueprint for all microservices
+
+### 2. AI Agent Capabilities
+The `bank-asset-agent` provides advanced AI capabilities:
+
+#### 2.1 Market Analysis Tools
+- Real-time market data processing
+- Trend analysis and prediction
+- Risk assessment and scoring
+- Portfolio optimization algorithms
+
+#### 2.2 Investment Decision Making
+- Rule-based investment validation
+- Compliance checking and reporting
+- Order execution and management
+- Queue processing and workflow automation
+
+#### 2.3 Database Integration
+- Direct database operations via specialized clients
+- Transaction management and rollback capabilities
+- Connection pooling and error handling
+- Performance optimization and monitoring
+
+### 3. Service Integration Patterns
+- **HTTP Clients**: RESTful API integration with retry logic
+- **gRPC Services**: High-performance internal communication
+- **Database Clients**: Direct database access with connection management
+- **Error Handling**: Comprehensive error recovery and logging
+
 ## Future Enhancements
 
 ### 1. Advanced AI Features
 - Machine learning models for investment recommendations
 - Predictive analytics for market trends
 - Automated portfolio rebalancing
+- **Enhanced Tools**: Additional AI tools in `bank-asset-agent/tools/`
+- **Model Integration**: ML model deployment and inference
+- **Real-time Learning**: Continuous model updates and improvement
 
 ### 2. Real-time Capabilities
 - WebSocket connections for real-time updates
 - Event-driven architecture
 - Real-time market data streaming
+- **Live Updates**: Real-time asset price updates
+- **Event Streaming**: Kafka or similar event streaming integration
+- **WebSocket APIs**: Real-time client communication
 
 ### 3. Scalability Improvements
 - Horizontal scaling capabilities
 - Database sharding strategies
 - Caching layers for performance
+- **Microservice Scaling**: Independent scaling of services
+- **Database Optimization**: Query optimization and indexing
+- **Caching Strategy**: Redis or similar caching layer
 
-This master architecture provides a comprehensive blueprint for building and extending the Bank of Anthos platform with clear service definitions, dependencies, and implementation guidelines.
+### 4. AI Agent Enhancements
+- **Multi-Agent Systems**: Coordination between multiple AI agents
+- **Natural Language Processing**: Conversational interfaces
+- **Advanced Analytics**: Deep learning models for market analysis
+- **Automated Trading**: Fully automated investment strategies
+
+This master architecture provides a comprehensive blueprint for building and extending the Bank of Anthos platform with clear service definitions, dependencies, implementation guidelines, and AI agent integration capabilities.

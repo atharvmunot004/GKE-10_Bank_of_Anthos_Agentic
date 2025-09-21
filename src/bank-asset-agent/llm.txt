@@ -1,0 +1,423 @@
+# Bank Asset Agent - LLM Documentation
+
+## Overview
+The `bank-asset-agent` is an AI-powered service that manages investment assets, analyzes market data, and executes investment decisions for the Bank of Anthos application. It serves as the central intelligence for asset management operations.
+
+## Service Architecture
+- **Service Name**: `bank-asset-agent`
+- **Port**: `8080`
+- **Protocol**: gRPC
+- **Authentication**: JWT tokens required
+- **Team**: Assets
+- **Tier**: Backend
+
+## Service Dependencies
+
+### 1. Market Reader Service (`market-reader-svc`)
+**Purpose**: Real-time market data and pricing information
+**Communication**: HTTP REST API
+**Data Flow**: bank-asset-agent → market-reader-svc
+**Usage**: Retrieve live market data, asset prices, and market trends
+
+### 2. Rule Checker Service (`rule-checker-svc`)
+**Purpose**: Business rule validation and compliance checking
+**Communication**: HTTP REST API
+**Data Flow**: bank-asset-agent ↔ rule-checker-svc
+**Usage**: Validate investment rules, compliance requirements, and risk parameters
+
+### 3. Execute Order Service (`execute-order-svc`)
+**Purpose**: Investment order execution and management
+**Communication**: HTTP REST API
+**Data Flow**: bank-asset-agent ↔ execute-order-svc
+**Usage**: Execute investment orders, manage order lifecycle, and track execution status
+
+### 4. Assets Database (`assets-db`)
+**Purpose**: Asset information storage and retrieval
+**Communication**: PostgreSQL connection
+**Data Flow**: bank-asset-agent ↔ assets-db
+**Usage**: Store and retrieve asset data, prices, availability, and metadata
+
+### 5. User Request Queue Service (`user-request-queue-svc`)
+**Purpose**: Investment and withdrawal request processing
+**Communication**: HTTP REST API
+**Data Flow**: user-request-queue-svc → bank-asset-agent
+**Usage**: Process investment requests from the queue and provide responses
+
+## Environment Variables
+
+### Core Configuration
+- `VERSION`: Service version (default: "dev")
+- `PORT`: Service port (default: 8080)
+- `ENABLE_TRACING`: Enable OpenTelemetry tracing (default: "true")
+- `ENABLE_METRICS`: Enable metrics collection (default: "true")
+
+### Service URLs
+- `MARKET_READER_URL`: URL for market-reader-svc (default: "http://market-reader-svc:8080")
+- `RULE_CHECKER_URL`: URL for rule-checker-svc (default: "http://rule-checker-svc:8080")
+- `EXECUTE_ORDER_URL`: URL for execute-order-svc (default: "http://execute-order-svc:8080")
+- `QUEUE_SVC_URL`: URL for user-request-queue-svc (default: "http://user-request-queue-svc:8080")
+
+### Database Configuration
+- `ASSETS_DB_URI`: Database connection URI for assets-db
+
+## API Endpoints
+
+### gRPC Service: BankAssetAgent
+
+#### 1. AnalyzeMarketData
+**Purpose**: Analyze market data and provide investment insights
+**Request**: MarketDataRequest
+**Response**: MarketAnalysisResponse
+**Usage**: Process real-time market data and generate investment recommendations
+
+#### 2. ProcessInvestmentRequest
+**Purpose**: Process investment requests from the queue
+**Request**: InvestmentRequest
+**Response**: InvestmentResponse
+**Usage**: Handle investment requests and coordinate with other services
+
+#### 3. ExecuteAssetManagement
+**Purpose**: Execute asset management operations
+**Request**: AssetManagementRequest
+**Response**: AssetManagementResponse
+**Usage**: Perform asset management tasks and updates
+
+#### 4. ValidateInvestmentRules
+**Purpose**: Validate investment rules and compliance
+**Request**: RuleValidationRequest
+**Response**: RuleValidationResponse
+**Usage**: Check investment rules and compliance requirements
+
+## Core Functions
+
+### 1. Market Data Analysis
+```python
+def analyze_market_data(asset_symbols, time_range):
+    """
+    Analyze market data for given assets
+    - Fetch data from market-reader-svc
+    - Apply AI analysis algorithms
+    - Generate investment insights
+    - Return analysis results
+    """
+    pass
+```
+
+### 2. Investment Rule Validation
+```python
+def validate_investment_rules(investment_request):
+    """
+    Validate investment rules and compliance
+    - Send request to rule-checker-svc
+    - Process validation results
+    - Return compliance status
+    """
+    pass
+```
+
+### 3. Order Execution
+```python
+def execute_investment_order(order_details):
+    """
+    Execute investment orders
+    - Validate order with rule-checker-svc
+    - Send order to execute-order-svc
+    - Monitor execution status
+    - Update asset database
+    """
+    pass
+```
+
+### 4. Asset Database Management
+```python
+def manage_asset_data(asset_id, operation, data):
+    """
+    Manage asset data in assets-db
+    - Connect to assets-db
+    - Perform CRUD operations
+    - Update asset information
+    - Return operation results
+    """
+    pass
+```
+
+### 5. Queue Processing
+```python
+def process_investment_queue():
+    """
+    Process investment requests from queue
+    - Poll user-request-queue-svc
+    - Process pending requests
+    - Coordinate with other services
+    - Update request status
+    """
+    pass
+```
+
+## Python Integration Examples
+
+### Using gRPC Client
+```python
+import grpc
+from bank_asset_agent_pb2_grpc import BankAssetAgentStub
+from bank_asset_agent_pb2 import MarketDataRequest, InvestmentRequest
+
+def create_grpc_client():
+    channel = grpc.insecure_channel('bank-asset-agent:8080')
+    return BankAssetAgentStub(channel)
+
+def analyze_market_data(asset_symbols):
+    client = create_grpc_client()
+    request = MarketDataRequest(asset_symbols=asset_symbols)
+    response = client.AnalyzeMarketData(request)
+    return response
+
+def process_investment_request(request_data):
+    client = create_grpc_client()
+    request = InvestmentRequest(**request_data)
+    response = client.ProcessInvestmentRequest(request)
+    return response
+```
+
+### Using HTTP Client for Dependencies
+```python
+import requests
+import os
+
+class BankAssetAgentClient:
+    def __init__(self):
+        self.market_reader_url = os.environ.get('MARKET_READER_URL')
+        self.rule_checker_url = os.environ.get('RULE_CHECKER_URL')
+        self.execute_order_url = os.environ.get('EXECUTE_ORDER_URL')
+        self.queue_svc_url = os.environ.get('QUEUE_SVC_URL')
+    
+    def get_market_data(self, symbols):
+        response = requests.get(f"{self.market_reader_url}/api/market-data", 
+                              params={'symbols': symbols})
+        return response.json()
+    
+    def validate_rules(self, investment_data):
+        response = requests.post(f"{self.rule_checker_url}/api/validate", 
+                               json=investment_data)
+        return response.json()
+    
+    def execute_order(self, order_data):
+        response = requests.post(f"{self.execute_order_url}/api/execute", 
+                               json=order_data)
+        return response.json()
+    
+    def process_queue_requests(self):
+        response = requests.get(f"{self.queue_svc_url}/api/process")
+        return response.json()
+```
+
+### Database Integration
+```python
+import psycopg2
+import os
+
+class AssetsDatabaseClient:
+    def __init__(self):
+        self.connection_string = os.environ.get('ASSETS_DB_URI')
+    
+    def get_asset_info(self, asset_id):
+        conn = psycopg2.connect(self.connection_string)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT asset_id, tier_number, asset_name, amount, price_per_unit, last_updated 
+            FROM assets 
+            WHERE asset_id = %s
+        """, (asset_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        return result
+    
+    def update_asset_price(self, asset_id, new_price):
+        conn = psycopg2.connect(self.connection_string)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE assets 
+            SET price_per_unit = %s, last_updated = CURRENT_TIMESTAMP 
+            WHERE asset_id = %s
+        """, (new_price, asset_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+```
+
+## Directory Structure
+
+```
+src/bank-asset-agent/
+├── agents/                    # AI agent implementations
+│   ├── market_analyzer.py    # Market data analysis agent
+│   ├── rule_validator.py     # Rule validation agent
+│   └── order_executor.py     # Order execution agent
+├── api/                      # API definitions and handlers
+│   ├── grpc_service.py       # gRPC service implementation
+│   ├── handlers.py           # Request handlers
+│   └── models.py             # Data models
+├── utils/                    # Utility functions
+│   ├── http_client.py        # HTTP client utilities
+│   ├── db_client.py          # Database client utilities
+│   └── logging.py            # Logging utilities
+├── k8s/                      # Kubernetes manifests
+│   ├── base/
+│   │   ├── bank-asset-agent.yaml
+│   │   └── kustomization.yaml
+│   └── overlays/development/
+│       └── kustomization.yaml
+├── tests/                    # Test suites
+│   ├── test_agents.py        # Agent tests
+│   ├── test_api.py           # API tests
+│   └── test_integration.py   # Integration tests
+├── Dockerfile                # Container definition
+├── requirements.txt          # Python dependencies
+├── skaffold.yaml            # Skaffold configuration
+├── server.py                # Main server file
+├── tools.py                 # Agent tools
+├── tools.json               # Tools configuration
+└── llm.txt                  # This documentation
+```
+
+## Agent Tools
+
+### 1. Market Data Tools
+- `get_market_data`: Retrieve real-time market data
+- `analyze_trends`: Analyze market trends and patterns
+- `predict_prices`: Predict asset price movements
+
+### 2. Rule Validation Tools
+- `check_investment_rules`: Validate investment rules
+- `assess_risk`: Assess investment risk
+- `validate_compliance`: Check compliance requirements
+
+### 3. Order Execution Tools
+- `execute_buy_order`: Execute buy orders
+- `execute_sell_order`: Execute sell orders
+- `monitor_order_status`: Monitor order execution
+
+### 4. Asset Management Tools
+- `update_asset_data`: Update asset information
+- `get_asset_availability`: Check asset availability
+- `calculate_portfolio_value`: Calculate portfolio values
+
+## Error Handling
+
+### Service Communication Errors
+- Handle HTTP timeouts and connection errors
+- Implement retry logic with exponential backoff
+- Log all communication failures
+- Provide fallback mechanisms
+
+### Database Errors
+- Handle connection failures
+- Implement transaction rollbacks
+- Log database errors
+- Provide data consistency checks
+
+### AI Agent Errors
+- Handle model prediction failures
+- Implement fallback analysis methods
+- Log agent errors
+- Provide human-readable error messages
+
+## Performance Considerations
+
+### Caching
+- Cache market data for short periods
+- Cache rule validation results
+- Implement Redis for distributed caching
+
+### Async Operations
+- Use async/await for I/O operations
+- Implement concurrent request processing
+- Use connection pooling for databases
+
+### Monitoring
+- Monitor service response times
+- Track error rates and patterns
+- Monitor resource utilization
+- Implement health checks
+
+## Security Considerations
+
+### Authentication
+- Validate JWT tokens for all requests
+- Implement proper token expiration handling
+- Use secure communication channels
+
+### Data Protection
+- Encrypt sensitive data in transit
+- Implement proper access controls
+- Log all data access for auditing
+
+### Input Validation
+- Validate all input parameters
+- Sanitize data before processing
+- Implement rate limiting
+
+## Testing
+
+### Unit Tests
+```bash
+cd tests
+python -m pytest test_agents.py
+python -m pytest test_api.py
+```
+
+### Integration Tests
+```bash
+cd tests
+python -m pytest test_integration.py
+```
+
+### Load Tests
+```bash
+# Use load testing tools to test service performance
+```
+
+## Deployment
+
+### Development
+```bash
+skaffold dev --module bank-asset-agent
+```
+
+### Production
+```bash
+skaffold run --module bank-asset-agent --profile production
+```
+
+### Docker
+```bash
+docker build -t bank-asset-agent .
+docker run -p 8080:8080 bank-asset-agent
+```
+
+## Monitoring and Observability
+
+### Metrics
+- Request/response times
+- Error rates
+- Service availability
+- Resource utilization
+
+### Logging
+- Structured logging with correlation IDs
+- Log all service interactions
+- Log all database operations
+- Log all AI agent decisions
+
+### Tracing
+- OpenTelemetry integration
+- Distributed tracing across services
+- Performance bottleneck identification
+
+This documentation provides comprehensive guidance for working with the Bank Asset Agent service, including API usage, integration patterns, and development guidelines.

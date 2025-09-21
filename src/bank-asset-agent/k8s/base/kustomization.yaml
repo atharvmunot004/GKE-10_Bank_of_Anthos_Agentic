@@ -3,4 +3,4 @@ kind: Kustomization
 commonLabels:
   tier: backend
 resources:
-  - portfolioagent.yaml
+  - bank-asset-agent.yaml

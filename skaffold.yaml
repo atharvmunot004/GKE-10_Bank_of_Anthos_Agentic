@@ -35,8 +35,8 @@ requires:
   - ledger-db
   path: src/ledger/ledger-db/skaffold.yaml
 - configs:
-  - portfolioagent
-  path: src/portfolioagent/skaffold.yaml
+  - bank-asset-agent
+  path: src/bank-asset-agent/skaffold.yaml
 - configs:
   - assets-db
   path: src/assets-db/skaffold.yaml

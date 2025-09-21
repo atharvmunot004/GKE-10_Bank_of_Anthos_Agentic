@@ -1,7 +1,7 @@
 apiVersion: skaffold/v4beta1
 kind: Config
 metadata:
-  name: portfolioagent
+  name: bank-asset-agent
 deploy:
   kubectl: {}
 profiles:

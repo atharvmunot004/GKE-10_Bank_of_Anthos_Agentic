@@ -18,19 +18,19 @@ metadata:
   labels:
     application: bank-of-anthos
     environment: development
-    team: portfolio
+    team: assets
     tier: backend
-  name: portfolioagent
+  name: bank-asset-agent
 spec:
   ports:
     - name: grpc
       port: 8080
       targetPort: 8080
   selector:
-    app: portfolioagent
+    app: bank-asset-agent
     application: bank-of-anthos
     environment: development
-    team: portfolio
+    team: assets
     tier: backend
   type: ClusterIP
 ---
@@ -40,30 +40,30 @@ metadata:
   labels:
     application: bank-of-anthos
     environment: development
-    team: portfolio
+    team: assets
     tier: backend
-  name: portfolioagent
+  name: bank-asset-agent
 spec:
   selector:
     matchLabels:
-      app: portfolioagent
+      app: bank-asset-agent
       application: bank-of-anthos
       environment: development
-      team: portfolio
+      team: assets
       tier: backend
   template:
     metadata:
       labels:
-        app: portfolioagent
+        app: bank-asset-agent
         application: bank-of-anthos
         environment: development
-        team: portfolio
+        team: assets
         tier: backend
     spec:
       serviceAccountName: bank-of-anthos
       containers:
-        - name: portfolioagent
-          image: portfolioagent
+        - name: bank-asset-agent
+          image: bank-asset-agent
           ports:
             - containerPort: 8080
           env:
@@ -75,11 +75,21 @@ spec:
               value: "true"
             - name: ENABLE_METRICS
               value: "true"
+            - name: MARKET_READER_URL
+              value: "http://market-reader-svc:8080"
+            - name: RULE_CHECKER_URL
+              value: "http://rule-checker-svc:8080"
+            - name: EXECUTE_ORDER_URL
+              value: "http://execute-order-svc:8080"
+            - name: QUEUE_SVC_URL
+              value: "http://user-request-queue-svc:8080"
           envFrom:
             - configMapRef:
                 name: environment-config
             - configMapRef:
                 name: demo-data-config
+            - configMapRef:
+                name: assets-db-config
           resources:
             requests:
               cpu: 100m
