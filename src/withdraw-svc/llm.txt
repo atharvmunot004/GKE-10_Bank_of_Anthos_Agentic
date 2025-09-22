@@ -1,0 +1,4 @@
+service description: 
+    -> this serivce will be triggered by the investment-manager-svc (accountid, withdrawal_amount)
+    -> then this serice will check with the user-portfolio table from the user-portfolio-db to ensure that the sum of the allocation od each tier is more than or equal to the withdrawal amount
+    -> once we know that the withdrawal_amount is allowed, it will send a request to user-request-queue-svc with the details about the 

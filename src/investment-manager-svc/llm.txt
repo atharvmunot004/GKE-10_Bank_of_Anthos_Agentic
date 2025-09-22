@@ -1,71 +1,135 @@
-# Investment Manager Service (investment-manager-svc) - AI Agent Documentation
+micro-service-description:
+  |-> will get account_id from frontend
+  |
+  |-> calls portfolio-reader-svc using the account_id to get current portfolio and the last 30 portfolio transaction details
+  |   |-> request: {
+  |   |     accountid: accountid CHAR(10) PRIMARY KEY [same as from accounts-db]
+  |   |   }
+  |   |-> response: {
+  |         portfolio: {
+  |           accountid,
+  |           tier1_allocation,
+  |           tier2_allocation,
+  |           tier3_allocation,
+  |           tier1_value,
+  |           tier2_value,
+  |           tier3_value,
+  |         },
+  |         transactions: {
+  |           [uuid, tier1_change, tier2_change, tier3_change, status]
+  |         }
+  |       }
+  |    
+  |-> if investment triggered calls invest-svc and reloads the page 
+  |   |-> request: {
+  |   |     accountid,
+  |   |     amount
+  |   |   }
+  |   |-> response: {
+  |   |     status
+  |   |   }
+  |   |-> if status is 'done': requests ledger-writer add a ledger accordingly
+  |       |-> else: return error message to frontend
+  |     
+  |-> if withdrawal triggered calls withdraw-svc, and reloads the page
+      |-> request: {
+      |     accountid,
+      |     amount
+      |   }
+      |-> response: {
+      |     status
+      |   }
+      |-> if status is 'done': requests ledger-writer add a ledger accordingly
+          |-> else: return error message to frontend
 
-## Service Overview
-The investment-manager-svc is a frontend-facing API service that provides portfolio management capabilities for the Bank of Anthos platform. It serves as an orchestration layer between the frontend and backend investment services, offering a clean API for portfolio operations.
+---created by Chinmay and Atharv for agent    
+-----------
+---created by agent for agent
+# Investment Manager Service - LLM Documentation
 
-## Core Functionality
-- **Portfolio Management**: Retrieve and display user portfolio information
-- **Investment Processing**: Handle investment requests with tier-based allocation
-- **Withdrawal Processing**: Process withdrawal requests with proportional tier distribution
-- **Transaction History**: Provide portfolio transaction history and reporting
-- **Tier Allocation**: Manage investment allocations across Conservative, Moderate, and Aggressive tiers
+## Overview
+The `investment-manager-svc` is an orchestration service that manages user investment portfolios by integrating with multiple backend services. It acts as the central API layer for investment operations, handling portfolio data retrieval, investment processing, and withdrawal operations.
 
 ## Service Architecture
-```
-Frontend → investment-manager-svc → [invest-svc, user-portfolio-db] (future)
-                ↓
-         [Mock Storage] (current)
-```
+- **Port**: 8080
+- **Language**: Python (Flask)
+- **Dependencies**: portfolio-reader-svc, invest-svc, withdraw-svc, ledger-writer
+- **Role**: Orchestration and API Gateway for investment operations
 
 ## API Endpoints
 
-### Health & Monitoring
-- **GET /health**: Health check endpoint
-- **GET /ready**: Readiness check endpoint
+### Health and Status
+- `GET /health` - Health check endpoint
+- `GET /ready` - Readiness probe endpoint
+- `GET /api/v1/status` - Service status and dependency health
 
 ### Portfolio Management
-- **GET /api/v1/portfolio/{user_id}**: Get user portfolio information
-- **GET /api/v1/portfolio/{user_id}/transactions**: Get portfolio transaction history
+- `GET /api/v1/portfolio/{account_id}` - Get portfolio information
+- `GET /api/v1/portfolio/{account_id}/transactions` - Get portfolio transactions
 
 ### Investment Operations
-- **POST /api/v1/invest**: Process investment requests
-- **POST /api/v1/withdraw**: Process withdrawal requests
+- `POST /api/v1/invest` - Process investment request
+- `POST /api/v1/withdraw` - Process withdrawal request
 
-## Request/Response Examples
+## Data Flow
 
-### Get Portfolio
+### 1. Portfolio Data Retrieval
+```
+Frontend → investment-manager-svc → portfolio-reader-svc
+```
+
 **Request:**
-```bash
-GET /api/v1/portfolio/1234567890
+```json
+GET /api/v1/portfolio/{account_id}
 ```
 
 **Response:**
 ```json
 {
-  "id": "portfolio-uuid",
-  "user_id": "1234567890",
-  "total_value": 10000.0,
-  "currency": "USD",
-  "tier1_allocation": 60.0,
-  "tier2_allocation": 30.0,
-  "tier3_allocation": 10.0,
-  "tier1_value": 6000.0,
-  "tier2_value": 3000.0,
-  "tier3_value": 1000.0,
-  "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2024-01-01T00:00:00Z"
+  "portfolio": {
+    "accountid": "1234567890",
+    "tier1_allocation": 60.0,
+    "tier2_allocation": 30.0,
+    "tier3_allocation": 10.0,
+    "tier1_value": 6000.00,
+    "tier2_value": 3000.00,
+    "tier3_value": 1000.00
+  },
+  "transactions": [
+    {
+      "uuid": "transaction-uuid-1",
+      "tier1_change": 100.00,
+      "tier2_change": 50.00,
+      "tier3_change": 25.00,
+      "status": "COMPLETED"
+    }
+  ]
 }
 ```
 
-### Invest Funds
+### 2. Investment Processing
+```
+Frontend → investment-manager-svc → invest-svc → ledger-writer
+```
+
 **Request:**
-```bash
+```json
 POST /api/v1/invest
-Content-Type: application/json
-
 {
-  "account_number": "1234567890",
-  "amount": 1000.0
+  "accountid": "1234567890",
+  "amount": 1000.00
+}
+```
+
+**Ledger Transaction:**
+```json
+{
+  "fromAccountNum": "1234567890",      // User's account
+  "toAccountNum": "9999999999",        // Bank's investment account
+  "fromRoutingNum": "123456789",
+  "toRoutingNum": "123456789",
+  "amount": 100000,                    // $1000.00 in cents
+  "uuid": "unique-transaction-id"
 }
 ```
 
@@ -73,24 +137,36 @@ Content-Type: application/json
 ```json
 {
   "status": "success",
-  "portfolio_id": "portfolio-uuid",
-  "total_invested": 1000.0,
-  "tier1_amount": 600.0,
-  "tier2_amount": 300.0,
-  "tier3_amount": 100.0,
-  "message": "Investment processed successfully"
+  "message": "Investment processed and recorded successfully",
+  "account_id": "1234567890",
+  "amount": 1000.00,
+  "ledger_recorded": true
 }
 ```
 
-### Withdraw Funds
+### 3. Withdrawal Processing
+```
+Frontend → investment-manager-svc → withdraw-svc → ledger-writer
+```
+
 **Request:**
-```bash
+```json
 POST /api/v1/withdraw
-Content-Type: application/json
-
 {
-  "account_number": "1234567890",
-  "amount": 500.0
+  "accountid": "1234567890",
+  "amount": 500.00
+}
+```
+
+**Ledger Transaction:**
+```json
+{
+  "fromAccountNum": "9999999999",      // Bank's investment account
+  "toAccountNum": "1234567890",        // User's account
+  "fromRoutingNum": "123456789",
+  "toRoutingNum": "123456789",
+  "amount": 50000,                     // $500.00 in cents
+  "uuid": "unique-transaction-id"
 }
 ```
 
@@ -98,257 +174,163 @@ Content-Type: application/json
 ```json
 {
   "status": "success",
-  "portfolio_id": "portfolio-uuid",
-  "total_withdrawn": 500.0,
-  "tier1_amount": 300.0,
-  "tier2_amount": 150.0,
-  "tier3_amount": 50.0,
-  "message": "Withdrawal processed successfully"
+  "message": "Withdrawal processed and recorded successfully",
+  "account_id": "1234567890",
+  "amount": 500.00,
+  "ledger_recorded": true
 }
-```
-
-## Tier Allocation Strategy
-
-### Current Implementation (Fixed Allocation)
-- **Tier 1 (Conservative)**: 60% of investments
-- **Tier 2 (Moderate)**: 30% of investments  
-- **Tier 3 (Aggressive)**: 10% of investments
-
-### Future Implementation (Dynamic Allocation)
-- **User Risk Profile**: Based on user-tier-agent analysis
-- **Market Conditions**: Adjusted based on market-reader-svc data
-- **Investment Goals**: Personalized allocation strategies
-- **Risk Tolerance**: User-specific risk preferences
-
-## Data Models
-
-### Portfolio Model
-```json
-{
-  "id": "string (UUID)",
-  "user_id": "string",
-  "total_value": "number (decimal)",
-  "currency": "string (default: USD)",
-  "tier1_allocation": "number (percentage)",
-  "tier2_allocation": "number (percentage)",
-  "tier3_allocation": "number (percentage)",
-  "tier1_value": "number (decimal)",
-  "tier2_value": "number (decimal)",
-  "tier3_value": "number (decimal)",
-  "created_at": "string (ISO timestamp)",
-  "updated_at": "string (ISO timestamp)"
-}
-```
-
-### Transaction Model
-```json
-{
-  "id": "string (UUID)",
-  "portfolio_id": "string (UUID)",
-  "transaction_type": "string (DEPOSIT|WITHDRAWAL)",
-  "amount": "number (decimal)",
-  "tier1_amount": "number (decimal)",
-  "tier2_amount": "number (decimal)",
-  "tier3_amount": "number (decimal)",
-  "created_at": "string (ISO timestamp)"
-}
-```
-
-## Business Logic
-
-### Investment Processing Flow
-1. **Input Validation**: Validate account number and amount
-2. **Portfolio Retrieval**: Get or create user portfolio
-3. **Tier Calculation**: Calculate tier allocations based on strategy
-4. **Portfolio Update**: Update portfolio values and allocations
-5. **Transaction Recording**: Record investment transaction
-6. **Response Generation**: Return success response with details
-
-### Withdrawal Processing Flow
-1. **Input Validation**: Validate account number and amount
-2. **Portfolio Retrieval**: Get user portfolio
-3. **Balance Verification**: Check sufficient funds
-4. **Proportional Calculation**: Calculate proportional withdrawal from tiers
-5. **Portfolio Update**: Update portfolio values
-6. **Transaction Recording**: Record withdrawal transaction
-7. **Response Generation**: Return success response with details
-
-### Error Handling
-- **Input Validation**: Reject invalid account numbers or amounts
-- **Insufficient Funds**: Handle withdrawal requests exceeding portfolio value
-- **Portfolio Not Found**: Create new portfolio for first-time investors
-- **Service Errors**: Graceful handling of backend service failures
-
-## Current Implementation Details
-
-### Mock Storage
-- **In-Memory Storage**: Portfolios and transactions stored in memory
-- **Data Persistence**: No persistent storage (resets on service restart)
-- **Concurrent Access**: Thread-safe operations for multiple requests
-- **UUID Generation**: Unique identifiers for portfolios and transactions
-
-### Fixed Allocation Logic
-```python
-# Investment allocation
-tier1_amount = amount * 0.6  # 60% Conservative
-tier2_amount = amount * 0.3  # 30% Moderate
-tier3_amount = amount * 0.1  # 10% Aggressive
-
-# Withdrawal allocation (proportional)
-tier1_withdrawal = amount * (portfolio.tier1_value / portfolio.total_value)
-tier2_withdrawal = amount * (portfolio.tier2_value / portfolio.total_value)
-tier3_withdrawal = amount * (portfolio.tier3_value / portfolio.total_value)
 ```
 
 ## Service Dependencies
 
-### Current Dependencies
-- **None**: Self-contained mock service
+### Portfolio Reader Service
+- **Purpose**: Retrieves portfolio data and transaction history
+- **Endpoint**: `http://portfolio-reader-svc:8080`
+- **Environment Variable**: `PORTFOLIO_READER_URI`
 
-### Future Dependencies
-1. **invest-svc**: Investment processing and execution
-2. **user-portfolio-db**: Persistent portfolio data storage
-3. **user-tier-agent**: Dynamic tier allocation based on user profile
-4. **bank-asset-agent**: Asset management and market analysis
-5. **rule-checker-svc**: Business rule validation and compliance
+### Investment Service
+- **Purpose**: Processes investment requests
+- **Endpoint**: `http://invest-svc:8080`
+- **Environment Variable**: `INVEST_SVC_URI`
 
-### Environment Variables
+### Withdrawal Service
+- **Purpose**: Processes withdrawal requests
+- **Endpoint**: `http://withdraw-svc:8080`
+- **Environment Variable**: `WITHDRAW_SVC_URI`
+
+### Ledger Writer Service
+- **Purpose**: Records financial transactions in ledger-db
+- **Endpoint**: `http://ledgerwriter:8080`
+- **Environment Variable**: `LEDGER_WRITER_URI`
+- **Authentication**: Requires JWT Bearer token
+- **Transaction Endpoint**: `POST /transactions`
+- **Health Endpoint**: `GET /ready`
+
+## Environment Variables
 - `PORT`: Service port (default: 8080)
+- `PORTFOLIO_READER_URI`: Portfolio reader service URL
+- `INVEST_SVC_URI`: Investment service URL
+- `WITHDRAW_SVC_URI`: Withdrawal service URL
+- `LEDGER_WRITER_URI`: Ledger writer service URL
+- `LOCAL_ROUTING_NUM`: Bank routing number
+- `INVESTMENT_BANK_ACCOUNT`: Bank's dedicated investment account (default: 9999999999)
+- `JWT_SECRET_KEY`: JWT secret key for token generation (from Kubernetes secret)
+- `JWT_ALGORITHM`: JWT algorithm (default: HS256)
+- `JWT_EXPIRATION_HOURS`: JWT token expiration in hours (default: 24)
+- `REQUEST_TIMEOUT`: Request timeout in seconds (default: 30)
 
-## Security Considerations
+## Investment Bank Account
 
-### Current Security
-- **Input Validation**: Basic input validation and sanitization
-- **Error Handling**: Safe error messages without sensitive information
-- **No Authentication**: Mock service without authentication (development only)
+The service uses a dedicated bank account for all investment operations:
 
-### Future Security
-- **JWT Authentication**: Token-based authentication for all endpoints
-- **Authorization**: Role-based access control
-- **Input Sanitization**: Comprehensive input validation and sanitization
-- **Rate Limiting**: API rate limiting and abuse prevention
-- **Audit Logging**: Complete audit trail for all operations
+- **Account Number**: `9999999999` (configurable via `INVESTMENT_BANK_ACCOUNT`)
+- **Purpose**: Centralized account for all investment transactions
+- **Investment Flow**: User Account → Investment Bank Account
+- **Withdrawal Flow**: Investment Bank Account → User Account
 
-## Performance Considerations
+This design ensures:
+- **Clear Transaction Tracking**: All investment money flows through a single account
+- **Audit Trail**: Easy to track total investment amounts and activity
+- **Risk Management**: Centralized control over investment funds
+- **Compliance**: Simplified reporting and regulatory compliance
 
-### Current Performance
-- **In-Memory Operations**: Fast in-memory data access
-- **Simple Logic**: Minimal processing overhead
-- **No Database**: No database connection overhead
+## Error Handling
+- **Service Unavailable**: Returns 503 when dependent services are down
+- **Invalid Data**: Returns 400 for malformed requests
+- **Investment/Withdrawal Failures**: Returns 400 with error details
+- **Partial Success**: Returns 200 with warning when ledger recording fails
 
-### Future Performance
-- **Database Optimization**: Efficient database queries and indexing
-- **Caching**: Redis caching for frequently accessed data
-- **Connection Pooling**: Database connection pooling
-- **Async Operations**: Asynchronous processing for heavy operations
-- **Load Balancing**: Horizontal scaling capabilities
+## Ledger Writer Integration
+
+### Transaction Format
+The ledgerwriter service expects transactions in this format:
+```json
+{
+  "fromAccountNum": "1234567890",
+  "toAccountNum": "9999999999", 
+  "fromRoutingNum": "123456789",
+  "toRoutingNum": "123456789",
+  "amount": 100000,
+  "uuid": "unique-transaction-id"
+}
+```
+
+### Authentication Requirements
+- **JWT Token Required**: All `/transactions` requests need `Authorization: Bearer <token>` header
+- **Token Forwarding**: Uses JWT token from incoming frontend request
+- **Account Validation**: JWT must contain account number that matches transaction
+- **Duplicate Prevention**: UUID field prevents duplicate transaction submissions
+
+### JWT Token Flow
+1. **Frontend** → **investment-manager-svc**: Sends JWT token in `Authorization: Bearer <token>` header
+2. **investment-manager-svc** → **ledgerwriter**: Forwards the same JWT token to ledgerwriter
+3. **ledgerwriter**: Validates JWT token and processes transaction
+
+### Current Implementation Status
+- **Format**: ✅ Correct JSON structure implemented
+- **Authentication**: ✅ JWT token forwarding implemented
+- **UUID Generation**: ✅ Unique transaction IDs generated
+- **Amount Conversion**: ✅ Dollars converted to cents correctly
+- **Token Extraction**: ✅ Extracts JWT from incoming request headers
+
+## Integration Patterns
+
+### Frontend Integration
+The frontend calls investment-manager-svc for all portfolio operations:
+```python
+# Get portfolio data
+response = requests.get(f'{INVESTMENT_MANAGER_URI}/api/v1/portfolio/{account_id}')
+
+# Process investment
+response = requests.post(f'{INVESTMENT_MANAGER_URI}/api/v1/invest', json={
+    'accountid': account_id,
+    'amount': amount
+})
+
+# Process withdrawal
+response = requests.post(f'{INVESTMENT_MANAGER_URI}/api/v1/withdraw', json={
+    'accountid': account_id,
+    'amount': amount
+})
+```
+
+### Service-to-Service Communication
+The service orchestrates calls to multiple backend services:
+1. **Portfolio Data**: Calls portfolio-reader-svc
+2. **Investment Processing**: Calls invest-svc, then ledger-writer
+3. **Withdrawal Processing**: Calls withdraw-svc, then ledger-writer
 
 ## Monitoring and Observability
+- **Health Checks**: `/health` and `/ready` endpoints
+- **Dependency Status**: `/api/v1/status` shows all service dependencies
+- **Logging**: Comprehensive logging for all operations
+- **Metrics**: Request/response tracking and error monitoring
 
-### Health Checks
-- **Liveness Probe**: `/health` endpoint for Kubernetes
-- **Readiness Probe**: `/ready` endpoint for Kubernetes
-- **Service Status**: Internal service health monitoring
+## Deployment
+- **Kubernetes**: Deploy using `kubectl apply -f kubernetes-manifests/investment-manager-svc.yaml`
+- **Skaffold**: Use `skaffold dev --module investment-manager-svc`
+- **Docker**: Build with `docker build -t investment-manager-svc .`
 
-### Logging
-- **Request Logging**: Log all API requests and responses
-- **Error Logging**: Detailed error logging with stack traces
-- **Business Logging**: Log investment and withdrawal operations
-- **Performance Logging**: Track response times and resource usage
+## Security
+- **No Direct Database Access**: Acts as API gateway only
+- **Service Authentication**: Relies on internal service mesh
+- **Input Validation**: Validates all incoming requests
+- **Error Sanitization**: Prevents sensitive data leakage in errors
 
-### Metrics
-- **API Metrics**: Request count, response time, error rate
-- **Business Metrics**: Investment volume, withdrawal volume, portfolio count
-- **System Metrics**: Memory usage, CPU usage, service health
+## Performance Considerations
+- **Connection Pooling**: Uses requests library with connection reuse
+- **Timeout Handling**: Configurable timeouts for all external calls
+- **Circuit Breaker Pattern**: Graceful degradation when services are unavailable
+- **Resource Limits**: CPU and memory limits configured in Kubernetes
 
-## Development Guidelines
-
-### Code Structure
-- **Flask Application**: Simple Flask-based REST API
-- **Route Organization**: Logical grouping of related endpoints
-- **Error Handling**: Centralized error handling and response formatting
-- **Data Models**: Clear data model definitions and validation
-
-### Testing
-- **Unit Tests**: Test individual functions and endpoints
-- **Integration Tests**: Test service interactions and data flow
-- **API Tests**: Test complete API workflows
-- **Performance Tests**: Load testing and performance validation
-
-### Deployment
-- **Docker**: Containerized deployment with Dockerfile
-- **Kubernetes**: Orchestrated deployment with health checks
-- **Environment Configuration**: Environment-specific settings
-- **Service Discovery**: Kubernetes service discovery
-
-## Future Architecture
-
-### Production Architecture
-```
-Frontend → investment-manager-svc → invest-svc → user-portfolio-db
-                ↓
-         user-tier-agent → bank-asset-agent → market-reader-svc
-                ↓
-         rule-checker-svc → execute-order-svc
-```
-
-### Service Integration
-1. **invest-svc Integration**: Replace mock investment processing
-2. **user-portfolio-db Integration**: Replace in-memory storage
-3. **user-tier-agent Integration**: Dynamic tier allocation
-4. **bank-asset-agent Integration**: Asset management and analysis
-5. **rule-checker-svc Integration**: Business rule validation
+## Testing
+- **Unit Tests**: Test individual service integration logic
+- **Integration Tests**: Test end-to-end workflows
+- **Load Tests**: Test under high concurrent load
+- **Chaos Tests**: Test resilience to service failures
 
 ## Troubleshooting
-
-### Common Issues
-1. **Portfolio Not Found**: Check user ID format and portfolio creation
-2. **Insufficient Funds**: Verify portfolio balance before withdrawal
-3. **Invalid Amount**: Check amount validation and format
-4. **Service Unavailable**: Check service health and dependencies
-
-### Debug Commands
-```bash
-# Check service health
-curl http://investment-manager-svc:8080/health
-
-# Check readiness
-curl http://investment-manager-svc:8080/ready
-
-# Test portfolio retrieval
-curl http://investment-manager-svc:8080/api/v1/portfolio/test-user
-
-# Test investment
-curl -X POST http://investment-manager-svc:8080/api/v1/invest \
-  -H "Content-Type: application/json" \
-  -d '{"account_number": "test-user", "amount": 1000.0}'
-```
-
-### Log Analysis
-- **Request Logs**: Check API request patterns and errors
-- **Error Logs**: Review error frequency and types
-- **Performance Logs**: Monitor response times and resource usage
-- **Business Logs**: Track investment and withdrawal patterns
-
-## Contact and Support
-
-### Service Owner
-- **Team**: Investment Management
-- **Tier**: Backend
-- **Application**: bank-of-anthos
-
-### Documentation
-- **README**: src/investment-manager-svc/README.md
-- **API Docs**: This file (llm.txt)
-- **Code**: src/investment-manager-svc/investment_manager.py
-
-### Related Services
-- **frontend**: User interface
-- **invest-svc**: Investment processing (future)
-- **user-portfolio-db**: Portfolio storage (future)
-- **user-tier-agent**: Tier allocation (future)
-- **bank-asset-agent**: Asset management (future)
-
----
-
-*This documentation is designed for AI agents to understand and integrate with the investment-manager-svc. For human developers, refer to the README.md file in the service directory.*
+- **Check Dependencies**: Use `/api/v1/status` to verify service health
+- **Review Logs**: Check application logs for error details
+- **Verify Configuration**: Ensure all environment variables are set
+- **Test Connectivity**: Verify network connectivity to dependent services

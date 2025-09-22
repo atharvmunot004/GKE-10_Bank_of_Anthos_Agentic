@@ -1,0 +1,326 @@
+# Consistency Manager Service - LLM Documentation
+
+## Overview
+The `consistency-manager-svc` is a critical microservice that ensures UUID consistency between the queue-db and portfolio-transaction table. It acts as a synchronization bridge, monitoring queue status updates and ensuring they are properly reflected in portfolio transaction records.
+
+## Purpose
+- **UUID Consistency**: Maintains the same UUID from request origination through completion
+- **Status Synchronization**: Syncs queue status updates to portfolio transactions
+- **Data Integrity**: Ensures portfolio transactions are created/updated based on queue entries
+- **Real-time Sync**: Provides background synchronization to keep data consistent
+
+## Service Details
+- **Service Name**: `consistency-manager-svc`
+- **Port**: `8080`
+- **Protocol**: HTTP/REST
+- **Database Dependencies**: `queue-db`, `user-portfolio-db`
+
+## API Reference
+
+### Health Endpoints
+- **GET** `/health` - Service health status
+  - Returns: `{"status": "healthy", "timestamp": "...", "sync_interval": 30, "sync_running": true}`
+- **GET** `/ready` - Service readiness status
+  - Returns: `{"status": "ready", "timestamp": "..."}`
+
+### Operations Endpoints
+- **POST** `/api/v1/sync` - Manually trigger sync operation
+  - Returns: `{"status": "success", "message": "Sync completed", "stats": {...}}`
+- **GET** `/api/v1/stats` - Get synchronization statistics
+  - Returns: `{"queue_stats": [...], "portfolio_stats": {...}, "sync_running": true}`
+
+## Environment Variables
+- `QUEUE_DB_URI`: Connection string for queue-db (default: postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db)
+- `USER_PORTFOLIO_DB_URI`: Connection string for user-portfolio-db (default: postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db)
+- `PORT`: Service port (default: 8080)
+- `SYNC_INTERVAL`: Sync interval in seconds (default: 30)
+- `BATCH_SIZE`: Number of entries to process per sync (default: 100)
+
+## Database Integration
+
+### Queue Database (queue-db)
+**Tables Monitored**:
+- `investment_queue`: Investment requests with status updates
+- `withdrawal_queue`: Withdrawal requests with status updates
+
+**Key Fields**:
+- `uuid`: Unique identifier for the request
+- `status`: Current processing status (PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED)
+- `processed_at`: Timestamp when processing completed
+- `tier_1`, `tier_2`, `tier_3`: Investment/withdrawal amounts
+
+### Portfolio Database (user-portfolio-db)
+**Tables Managed**:
+- `portfolio_transactions`: Portfolio transaction records
+
+**Key Fields**:
+- `uuid`: Unique identifier (matches queue UUID)
+- `type`: Transaction type (INVEST, WITHDRAW)
+- `amount`: Total transaction amount
+- `tier1_amount`, `tier2_amount`, `tier3_amount`: Tier-specific amounts
+- `status`: Transaction status (synced from queue)
+
+## Synchronization Logic
+
+### 1. Queue Monitoring
+```sql
+-- Monitors both investment and withdrawal queues
+SELECT 
+    'investment' as queue_type,
+    queue_id, account_number, tier_1, tier_2, tier_3,
+    uuid, status, created_at, updated_at, processed_at
+FROM investment_queue 
+WHERE status IN ('PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED')
+AND processed_at IS NOT NULL
+
+UNION ALL
+
+SELECT 
+    'withdrawal' as queue_type,
+    queue_id, account_number, tier_1, tier_2, tier_3,
+    uuid, status, created_at, updated_at, processed_at
+FROM withdrawal_queue 
+WHERE status IN ('PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED')
+AND processed_at IS NOT NULL
+```
+
+### 2. Transaction Update/Creation
+```sql
+-- Updates existing portfolio transaction
+UPDATE portfolio_transactions 
+SET status = %s, updated_at = NOW()
+WHERE id = %s
+
+-- Creates new portfolio transaction
+INSERT INTO portfolio_transactions (
+    portfolio_id, transaction_type, tier1_change, tier2_change, tier3_change,
+    total_amount, status, created_at, updated_at
+) VALUES (
+    %s, %s, %s, %s, %s, %s, %s, %s, %s
+)
+```
+
+### 3. Portfolio Value Updates
+```sql
+-- Updates user portfolio tier values when transaction is completed
+UPDATE user_portfolios 
+SET 
+    tier1_value = %s,
+    tier2_value = %s,
+    tier3_value = %s,
+    total_value = %s,
+    updated_at = NOW()
+WHERE id = %s
+```
+
+## Business Logic
+
+### Investment Processing
+1. **Queue Entry**: Investment request added to `investment_queue`
+2. **Processing**: Status updated to `PROCESSING`
+3. **Completion**: Status updated to `COMPLETED` with `processed_at`
+4. **Sync**: Consistency manager creates portfolio transaction
+5. **Result**: Portfolio transaction reflects investment with positive amounts
+
+### Withdrawal Processing
+1. **Queue Entry**: Withdrawal request added to `withdrawal_queue`
+2. **Processing**: Status updated to `PROCESSING`
+3. **Completion**: Status updated to `COMPLETED` with `processed_at`
+4. **Sync**: Consistency manager creates portfolio transaction
+5. **Result**: Portfolio transaction reflects withdrawal with negative amounts
+
+### Error Handling
+- **Database Connection Failures**: Logged and retried
+- **Sync Failures**: Individual entry errors logged, batch continues
+- **Missing Transactions**: Created if not found
+- **Status Mismatches**: Updated to match queue status
+
+## Monitoring and Observability
+
+### Health Checks
+- **Liveness Probe**: `/health` endpoint
+- **Readiness Probe**: `/ready` endpoint
+- **Database Connectivity**: Tests both database connections
+
+### Statistics
+- **Queue Statistics**: Counts by status and type
+- **Portfolio Statistics**: Transaction counts and types
+- **Sync Statistics**: Processed, created, updated, error counts
+
+### Logging
+- **INFO**: Normal operation and sync statistics
+- **WARNING**: Non-critical issues
+- **ERROR**: Sync failures and database errors
+- **DEBUG**: Detailed operation tracing
+
+## Deployment
+
+### Kubernetes Configuration
+```yaml
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: consistency-manager-svc
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: consistency-manager-svc
+
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consistency-manager-svc
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: consistency-manager-svc
+          image: consistency-manager-svc
+          ports:
+            - containerPort: 8080
+          env:
+            - name: QUEUE_DB_URI
+              value: "postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db"
+            - name: USER_PORTFOLIO_DB_URI
+              value: "postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db"
+```
+
+### Skaffold Configuration
+```yaml
+apiVersion: skaffold/v4beta1
+kind: Config
+metadata:
+  name: consistency-manager-svc
+build:
+  artifacts:
+    - image: consistency-manager-svc
+deploy:
+  kustomize:
+    paths:
+      - k8s/overlays/development
+```
+
+## Testing
+
+### Unit Tests
+```bash
+# Run unit tests
+cd tests
+python -m pytest test_consistency_manager.py -v
+```
+
+### Integration Tests
+```bash
+# Test with real databases
+python -m pytest test_integration.py -v
+```
+
+### Manual Testing
+```bash
+# Health check
+curl http://consistency-manager-svc:8080/health
+
+# Manual sync
+curl -X POST http://consistency-manager-svc:8080/api/v1/sync
+
+# Get statistics
+curl http://consistency-manager-svc:8080/api/v1/stats
+```
+
+## Security Considerations
+
+### Database Access
+- **Read Access**: queue-db (investment_queue, withdrawal_queue)
+- **Write Access**: user-portfolio-db (portfolio_transactions)
+- **Connection Security**: Uses environment variables for credentials
+
+### Service Security
+- **Non-root User**: Runs as user 1000
+- **Read-only Filesystem**: Security best practices
+- **Resource Limits**: CPU and memory constraints
+- **Network Policies**: Controlled database access
+
+## Performance Considerations
+
+### Sync Optimization
+- **Batch Processing**: Configurable batch size (default: 100)
+- **Sync Interval**: Configurable interval (default: 30 seconds)
+- **Connection Pooling**: Efficient database connections
+- **Error Handling**: Individual entry failures don't stop batch
+
+### Resource Usage
+- **CPU**: 100m request, 500m limit
+- **Memory**: 128Mi request, 512Mi limit
+- **Storage**: No persistent storage required
+
+## Troubleshooting
+
+### Common Issues
+1. **Database Connection Failed**
+   - Check database service availability
+   - Verify connection strings
+   - Check network policies
+
+2. **Sync Not Working**
+   - Check service logs
+   - Verify database permissions
+   - Test manual sync endpoint
+
+3. **High Memory Usage**
+   - Reduce batch size
+   - Increase sync interval
+   - Check for memory leaks
+
+### Debug Commands
+```bash
+# Check service logs
+kubectl logs -f deployment/consistency-manager-svc
+
+# Check service status
+kubectl describe deployment consistency-manager-svc
+
+# Test database connectivity
+kubectl exec -it deployment/consistency-manager-svc -- python -c "
+import psycopg2
+conn = psycopg2.connect('postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db')
+print('Queue DB connected')
+conn.close()
+"
+```
+
+## Future Enhancements
+
+### Planned Features
+- **Metrics**: Prometheus metrics for monitoring
+- **Alerting**: Alerts for sync failures
+- **Retry Logic**: Automatic retry for failed syncs
+- **Batch Processing**: More efficient batch operations
+- **Real-time Updates**: WebSocket-based real-time updates
+
+### Scalability
+- **Horizontal Scaling**: Multiple replicas for high availability
+- **Load Balancing**: Distribute sync workload
+- **Partitioning**: Process different queue types separately
+
+## Integration Patterns
+
+### With Other Services
+- **invest-svc**: Creates entries in investment_queue
+- **withdraw-svc**: Creates entries in withdrawal_queue
+- **user-portfolio-db**: Receives synchronized transactions
+- **frontend**: Can query portfolio transactions for display
+
+### Data Flow
+1. **Request Origination**: User initiates investment/withdrawal
+2. **Queue Entry**: Service adds entry to appropriate queue
+3. **Processing**: Queue entry status updated during processing
+4. **Completion**: Queue entry marked as completed
+5. **Sync**: Consistency manager syncs to portfolio transactions
+6. **Display**: Frontend shows updated portfolio data
+
+This service is critical for maintaining data consistency across the Bank of Anthos portfolio management system and ensures that all transactions are properly tracked from origination to completion.

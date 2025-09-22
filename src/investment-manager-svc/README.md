@@ -1,26 +1,35 @@
 # Investment Manager Service
 
-A microservice that manages user investment portfolios, providing portfolio information, transaction history, and investment/withdrawal capabilities.
+An orchestration service that manages user investment portfolios by integrating with multiple backend services. It acts as the central API layer for investment operations, handling portfolio data retrieval, investment processing, and withdrawal operations.
 
-## Overview
+## Features
 
-The Investment Manager Service acts as a frontend-facing API that manages user investment portfolios. It provides:
+- **Portfolio Management**: Retrieve portfolio information and transaction history
+- **Investment Processing**: Process investment requests with tier-based allocation
+- **Withdrawal Processing**: Handle withdrawal requests with proportional distribution
+- **Service Orchestration**: Coordinate calls to multiple backend services
+- **Transaction Recording**: Automatically record transactions in ledger-db
+- **Error Handling**: Comprehensive error handling and logging
 
-- Portfolio information retrieval
-- Investment processing
-- Withdrawal processing
-- Transaction history
-- Tier-based fund allocation
+## Architecture
+
+The Investment Manager Service acts as an orchestration layer that:
+
+1. **Retrieves Portfolio Data**: Calls portfolio-reader-svc to get current portfolio information
+2. **Processes Investments**: Calls invest-svc to handle investment requests
+3. **Processes Withdrawals**: Calls withdraw-svc to handle withdrawal requests
+4. **Records Transactions**: Calls ledger-writer to record financial transactions
 
 ## API Endpoints
 
-### Health Checks
+### Health and Status
 - `GET /health` - Health check endpoint
-- `GET /ready` - Readiness check endpoint
+- `GET /ready` - Readiness probe endpoint
+- `GET /api/v1/status` - Service status and dependency health
 
 ### Portfolio Management
-- `GET /api/v1/portfolio/{user_id}` - Get user portfolio information
-- `GET /api/v1/portfolio/{user_id}/transactions` - Get portfolio transaction history
+- `GET /api/v1/portfolio/{account_id}` - Get portfolio information
+- `GET /api/v1/portfolio/{account_id}/transactions` - Get portfolio transactions
 
 ### Investment Operations
 - `POST /api/v1/invest` - Process investment request
@@ -30,81 +39,100 @@ The Investment Manager Service acts as a frontend-facing API that manages user i
 
 ### Get Portfolio
 ```bash
-GET /api/v1/portfolio/1234567890
+curl -X GET http://localhost:8080/api/v1/portfolio/1234567890
 ```
 
 Response:
 ```json
 {
-  "id": "portfolio-uuid",
-  "user_id": "1234567890",
-  "total_value": 10000.0,
-  "currency": "USD",
-  "tier1_allocation": 60.0,
-  "tier2_allocation": 30.0,
-  "tier3_allocation": 10.0,
-  "tier1_value": 6000.0,
-  "tier2_value": 3000.0,
-  "tier3_value": 1000.0,
-  "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2024-01-01T00:00:00Z"
+  "portfolio": {
+    "accountid": "1234567890",
+    "tier1_allocation": 60.0,
+    "tier2_allocation": 30.0,
+    "tier3_allocation": 10.0,
+    "tier1_value": 6000.00,
+    "tier2_value": 3000.00,
+    "tier3_value": 1000.00
+  },
+  "transactions": [
+    {
+      "uuid": "transaction-uuid-1",
+      "tier1_change": 100.00,
+      "tier2_change": 50.00,
+      "tier3_change": 25.00,
+      "status": "COMPLETED"
+    }
+  ]
 }
 ```
 
-### Invest Funds
+### Process Investment
 ```bash
-POST /api/v1/invest
-Content-Type: application/json
-
-{
-  "account_number": "1234567890",
-  "amount": 1000.0
-}
+curl -X POST http://localhost:8080/api/v1/invest \
+  -H "Content-Type: application/json" \
+  -d '{"accountid": "1234567890", "amount": 1000.0}'
 ```
 
 Response:
 ```json
 {
   "status": "success",
-  "portfolio_id": "portfolio-uuid",
-  "total_invested": 1000.0,
-  "tier1_amount": 600.0,
-  "tier2_amount": 300.0,
-  "tier3_amount": 100.0,
-  "message": "Investment processed successfully"
+  "message": "Investment processed and recorded successfully",
+  "account_id": "1234567890",
+  "amount": 1000.0,
+  "ledger_recorded": true
 }
 ```
 
-### Withdraw Funds
+### Process Withdrawal
 ```bash
-POST /api/v1/withdraw
-Content-Type: application/json
-
-{
-  "account_number": "1234567890",
-  "amount": 500.0
-}
+curl -X POST http://localhost:8080/api/v1/withdraw \
+  -H "Content-Type: application/json" \
+  -d '{"accountid": "1234567890", "amount": 500.0}'
 ```
 
 Response:
 ```json
 {
   "status": "success",
-  "portfolio_id": "portfolio-uuid",
-  "total_withdrawn": 500.0,
-  "tier1_amount": 300.0,
-  "tier2_amount": 150.0,
-  "tier3_amount": 50.0,
-  "message": "Withdrawal processed successfully"
+  "message": "Withdrawal processed and recorded successfully",
+  "account_id": "1234567890",
+  "amount": 500.0,
+  "ledger_recorded": true
 }
 ```
 
-## Tier Allocation Strategy
+## Service Dependencies
 
-The service uses a fixed allocation strategy:
-- **Tier 1 (Conservative)**: 60% of investments
-- **Tier 2 (Moderate)**: 30% of investments  
-- **Tier 3 (Aggressive)**: 10% of investments
+### Portfolio Reader Service
+- **Purpose**: Retrieves portfolio data and transaction history
+- **Endpoint**: `http://portfolio-reader-svc:8080`
+- **Environment Variable**: `PORTFOLIO_READER_URI`
+
+### Investment Service
+- **Purpose**: Processes investment requests
+- **Endpoint**: `http://invest-svc:8080`
+- **Environment Variable**: `INVEST_SVC_URI`
+
+### Withdrawal Service
+- **Purpose**: Processes withdrawal requests
+- **Endpoint**: `http://withdraw-svc:8080`
+- **Environment Variable**: `WITHDRAW_SVC_URI`
+
+### Ledger Writer Service
+- **Purpose**: Records financial transactions in ledger-db
+- **Endpoint**: `http://ledgerwriter:8080`
+- **Environment Variable**: `LEDGER_WRITER_URI`
+
+## Environment Variables
+
+- `PORT`: Service port (default: 8080)
+- `PORTFOLIO_READER_URI`: Portfolio reader service URL
+- `INVEST_SVC_URI`: Investment service URL
+- `WITHDRAW_SVC_URI`: Withdrawal service URL
+- `LEDGER_WRITER_URI`: Ledger writer service URL
+- `LOCAL_ROUTING_NUM`: Bank routing number
+- `REQUEST_TIMEOUT`: Request timeout in seconds (default: 30)
 
 ## Development
 
@@ -112,6 +140,13 @@ The service uses a fixed allocation strategy:
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+
+# Set environment variables
+export PORTFOLIO_READER_URI=http://localhost:8081
+export INVEST_SVC_URI=http://localhost:8082
+export WITHDRAW_SVC_URI=http://localhost:8083
+export LEDGER_WRITER_URI=http://localhost:8084
+export LOCAL_ROUTING_NUM=123456789
 
 # Run the service
 python investment_manager.py
@@ -123,49 +158,91 @@ python investment_manager.py
 docker build -t investment-manager-svc .
 
 # Run container
-docker run -p 8080:8080 investment-manager-svc
+docker run -p 8080:8080 \
+  -e PORTFOLIO_READER_URI=http://portfolio-reader-svc:8080 \
+  -e INVEST_SVC_URI=http://invest-svc:8080 \
+  -e WITHDRAW_SVC_URI=http://withdraw-svc:8080 \
+  -e LEDGER_WRITER_URI=http://ledgerwriter:8080 \
+  investment-manager-svc
 ```
+
+## Testing
+
+```bash
+# Run tests
+python -m pytest tests/
+
+# Run with coverage
+python -m pytest tests/ --cov=investment_manager
+
+# Test specific endpoint
+curl -X GET http://localhost:8080/api/v1/status
+```
+
+## Deployment
 
 ### Kubernetes
 ```bash
-# Deploy to Kubernetes
-kubectl apply -f ../../kubernetes-manifests/investment-manager-svc.yaml
+# Apply manifests
+kubectl apply -f kubernetes-manifests/investment-manager-svc.yaml
+
+# Check status
+kubectl get pods -l app=investment-manager-svc
+
+# Check logs
+kubectl logs -l app=investment-manager-svc
 ```
 
-## Environment Variables
+### Skaffold
+```bash
+# Deploy with Skaffold
+skaffold dev --module investment-manager-svc
 
-- `PORT`: Service port (default: 8080)
-
-## Current Implementation Status
-
-This service currently provides mock functionality for demonstration purposes. The implementation includes:
-
-1. **Mock Portfolio Management**: In-memory portfolio storage for demo purposes
-2. **Fixed Tier Allocation**: 60% Conservative, 30% Moderate, 10% Aggressive
-3. **Basic Transaction Recording**: Simple transaction logging
-4. **REST API**: Complete API interface for frontend integration
-
-## Future Enhancements
-
-Production versions will include:
-
-1. **Integrate with invest-svc**: Use the actual investment processing service
-2. **Database Integration**: Connect to user-portfolio-db for persistent storage
-3. **User-tier-agent Integration**: Use dynamic tier allocation based on user risk profile
-4. **Authentication**: Add proper JWT token validation
-5. **Error Handling**: Enhanced error handling and logging
-6. **Monitoring**: Add metrics and observability
-
-## Architecture
-
-```
-Frontend → Investment Manager Service → invest-svc → user-portfolio-db
-                ↓
-         user-tier-agent (future)
+# Deploy to specific environment
+skaffold run --module investment-manager-svc -p development
 ```
 
-The Investment Manager Service serves as a facade that:
-- Provides a clean API for the frontend
-- Handles user authentication and authorization
-- Manages portfolio data retrieval and updates
-- Coordinates with backend investment services
+## Monitoring and Observability
+
+- **Health Checks**: `/health` and `/ready` endpoints
+- **Dependency Status**: `/api/v1/status` shows all service dependencies
+- **Logging**: Comprehensive logging for all operations
+- **Error Tracking**: Detailed error logging and monitoring
+- **Performance Metrics**: Request/response tracking
+
+## Error Handling
+
+- **Service Unavailable**: Returns 503 when dependent services are down
+- **Invalid Data**: Returns 400 for malformed requests
+- **Investment/Withdrawal Failures**: Returns 400 with error details
+- **Partial Success**: Returns 200 with warning when ledger recording fails
+
+## Security
+
+- **No Direct Database Access**: Acts as API gateway only
+- **Service Authentication**: Relies on internal service mesh
+- **Input Validation**: Validates all incoming requests
+- **Error Sanitization**: Prevents sensitive data leakage in errors
+
+## Performance Considerations
+
+- **Connection Pooling**: Uses requests library with connection reuse
+- **Timeout Handling**: Configurable timeouts for all external calls
+- **Circuit Breaker Pattern**: Graceful degradation when services are unavailable
+- **Resource Limits**: CPU and memory limits configured in Kubernetes
+
+## Troubleshooting
+
+- **Check Dependencies**: Use `/api/v1/status` to verify service health
+- **Review Logs**: Check application logs for error details
+- **Verify Configuration**: Ensure all environment variables are set
+- **Test Connectivity**: Verify network connectivity to dependent services
+
+## Integration
+
+This service integrates with:
+- **Frontend**: Provides API endpoints for portfolio management
+- **Portfolio Reader Service**: Retrieves portfolio data
+- **Investment Service**: Processes investment operations
+- **Withdrawal Service**: Processes withdrawal operations
+- **Ledger Writer Service**: Records financial transactions

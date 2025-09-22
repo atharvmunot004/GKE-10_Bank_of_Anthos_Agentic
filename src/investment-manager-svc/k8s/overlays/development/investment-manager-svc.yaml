@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: investment-manager-svc
+spec:
+  template:
+    spec:
+      containers:
+        - name: investment-manager-svc
+          env:
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: REQUEST_TIMEOUT
+              value: "60"
