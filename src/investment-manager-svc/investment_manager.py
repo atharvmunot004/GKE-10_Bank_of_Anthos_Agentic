@@ -225,12 +225,13 @@ def invest():
         # Call invest-svc
         invest_request = {
             "accountid": account_id,
-            "amount": amount
+            "amount": amount,
         }
         
         invest_response = requests.post(
             f'{INVEST_SVC_URI}/api/v1/invest',
             json=invest_request,
+            headers=get_auth_headers_from_request(request),
             timeout=REQUEST_TIMEOUT
         )
         
@@ -352,6 +353,7 @@ def withdraw():
         withdraw_response = requests.post(
             f'{WITHDRAW_SVC_URI}/api/v1/withdraw',
             json=withdraw_request,
+            headers=get_auth_headers_from_request(request),
             timeout=REQUEST_TIMEOUT
         )
         

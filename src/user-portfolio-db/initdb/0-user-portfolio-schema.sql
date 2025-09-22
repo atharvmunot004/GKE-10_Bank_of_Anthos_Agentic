@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Create user_portfolios table for tier-based fund allocation
 CREATE TABLE IF NOT EXISTS user_portfolios (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  accountid VARCHAR(10) NOT NULL,
   total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'USD',
   tier1_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier1_allocation >= 0 AND tier1_allocation <= 100),
@@ -59,8 +59,8 @@ CREATE INDEX IF NOT EXISTS idx_user_portfolios_created_at ON user_portfolios (cr
 -- Create portfolio_transactions table for fund allocation changes
 CREATE TABLE IF NOT EXISTS portfolio_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  portfolio_id UUID NOT NULL REFERENCES user_portfolios(id) ON DELETE CASCADE,
-  transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('ALLOCATION_CHANGE', 'DEPOSIT', 'WITHDRAWAL')),
+  accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(id) ON DELETE CASCADE,
+  transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL')),
   tier1_change NUMERIC(5,2) DEFAULT 0,
   tier2_change NUMERIC(5,2) DEFAULT 0,
   tier3_change NUMERIC(5,2) DEFAULT 0,
