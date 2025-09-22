@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-request-queue-svc
+  labels:
+    app: user-request-queue-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-request-queue-svc
+  template:
+    metadata:
+      labels:
+        app: user-request-queue-svc
+    spec:
+      containers:
+      - name: user-request-queue-svc
+        image: user-request-queue-svc
+        ports:
+        - containerPort: 8080
+        env:
+        - name: QUEUE_DB_URI
+          value: "postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db"
+        - name: BANK_ASSET_AGENT_URI
+          value: "http://bank-asset-agent:8080"
+        - name: BATCH_SIZE
+          value: "10"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        - name: POLLING_INTERVAL
+          value: "5"
+        - name: PORT
+          value: "8080"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-request-queue-svc
+  labels:
+    app: user-request-queue-svc
+spec:
+  selector:
+    app: user-request-queue-svc
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

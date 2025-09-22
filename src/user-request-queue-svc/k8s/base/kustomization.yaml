@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- user-request-queue-svc.yaml
+
+commonLabels:
+  app.kubernetes.io/name: user-request-queue-svc
+  app.kubernetes.io/instance: user-request-queue-svc
+  app.kubernetes.io/component: microservice
+  app.kubernetes.io/part-of: bank-of-anthos
+
+images:
+- name: user-request-queue-svc
+  newTag: latest
