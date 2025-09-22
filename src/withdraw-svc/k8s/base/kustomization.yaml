@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- withdraw-svc.yaml
+
+commonLabels:
+  app.kubernetes.io/name: withdraw-svc
+  app.kubernetes.io/instance: withdraw-svc
+  app.kubernetes.io/component: microservice
+  app.kubernetes.io/part-of: bank-of-anthos
+
+images:
+- name: withdraw-svc
+  newTag: latest

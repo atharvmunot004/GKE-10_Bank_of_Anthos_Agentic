@@ -1,0 +1,42 @@
+microservice-description:
+{
+    receives: {
+        uuid,
+        tier1,
+        tier2,
+        tier3,
+        purpose: "WITHDRAW" or "INVEST"
+    },
+    step1: {
+        description: "adds this in queue-db with the status as PROCESSING and keeps a copy of the request"
+    },
+    step2: {
+        description: "once it gets 10 such requests, it pools them
+        [
+            {uuid, accountid, tier1, tier2, tier3, "WITHDRAW"/"INVEST"},
+            {uuid, accountid, tier1, tier2, tier3, "WITHDRAW"/"INVEST"},
+            {uuid, accountid, tier1, tier2, tier3, "WITHDRAW"/"INVEST"},
+            .
+            .
+            .
+        ]
+        the serivce will assign values to the Variables T1 = 0, T2 = 0, and T3 = 0",
+    },
+    step3: {
+        description "for all the requests which has purpose="INVEST", it will add their tier1 to T1, tier2 to T2, and tier3 to T3. And for each request which has purpose="WITHDRAW" it will subtract their tier1 from T1, tier2 from T2, tier3 from T3."
+    },
+    step4: {
+        description: "makes a request to bank-asset-agent",
+        payload: {
+            T1,
+            T2,
+            T3
+        },
+        response: {
+            status
+        }
+    },
+    step5: {
+        description: "Based on the response status of bank-asset-agent, it updates the status of these 10 uuids in queue-db as 'DONE' or 'FAILED'"
+    }
+}
