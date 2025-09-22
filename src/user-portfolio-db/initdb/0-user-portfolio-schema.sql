@@ -36,30 +36,31 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Create user_portfolios table for tier-based fund allocation
 CREATE TABLE IF NOT EXISTS user_portfolios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   accountid VARCHAR(10) NOT NULL,
-  total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'USD',
-  tier1_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier1_allocation >= 0 AND tier1_allocation <= 100),
-  tier2_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier2_allocation >= 0 AND tier2_allocation <= 100),
-  tier3_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier3_allocation >= 0 AND tier3_allocation <= 100),
+  tier1_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+  tier2_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+  tier3_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+  total_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
   tier1_value NUMERIC(15,2) NOT NULL DEFAULT 0,
   tier2_value NUMERIC(15,2) NOT NULL DEFAULT 0,
-  tier3_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+  tier3_value NUMERIC(15,2) NOT NULL DEFAULT 0, 
+  total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT check_tier_allocation CHECK (tier1_allocation + tier2_allocation + tier3_allocation = 100)
+  CONSTRAINT check_tier_allocation CHECK (tier1_allocation + tier2_allocation + tier3_allocation = total_allocation),
+  CONSTRAINT check_tier_value CHECK (tier1_value + tier2_value + tier3_value = total_value)
 );
 
 -- Create indexes for user_portfolios table
-CREATE INDEX IF NOT EXISTS idx_user_portfolios_user ON user_portfolios (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_portfolios_accountid ON user_portfolios (accountid);
 CREATE INDEX IF NOT EXISTS idx_user_portfolios_created_at ON user_portfolios (created_at);
 
 
 -- Create portfolio_transactions table for fund allocation changes
 CREATE TABLE IF NOT EXISTS portfolio_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(id) ON DELETE CASCADE,
+  accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(accountid) ON DELETE CASCADE,
   transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL')),
   tier1_change NUMERIC(5,2) DEFAULT 0,
   tier2_change NUMERIC(5,2) DEFAULT 0,
@@ -68,11 +69,12 @@ CREATE TABLE IF NOT EXISTS portfolio_transactions (
   fees NUMERIC(10,2) DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT check_tier_change CHECK (tier1_change + tier2_change + tier3_change = total_amount)
 );
 
 -- Create indexes for portfolio_transactions table
-CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_portfolio ON portfolio_transactions (portfolio_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_accountid ON portfolio_transactions (accountid);
 CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_type ON portfolio_transactions (transaction_type);
 CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_status ON portfolio_transactions (status);
 CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_created_at ON portfolio_transactions (created_at);
@@ -80,7 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_created_at ON portfolio_tr
 -- Create portfolio_analytics table for storing calculated metrics
 CREATE TABLE IF NOT EXISTS portfolio_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  portfolio_id UUID NOT NULL REFERENCES user_portfolios(id) ON DELETE CASCADE,
+  accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(accountid) ON DELETE CASCADE,
   total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
   total_invested NUMERIC(15,2) NOT NULL DEFAULT 0,
   total_gain_loss NUMERIC(15,2) NOT NULL DEFAULT 0,
@@ -90,7 +92,7 @@ CREATE TABLE IF NOT EXISTS portfolio_analytics (
 );
 
 -- Create indexes for portfolio_analytics table
-CREATE INDEX IF NOT EXISTS idx_portfolio_analytics_portfolio ON portfolio_analytics (portfolio_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_analytics_accountid ON portfolio_analytics (accountid);
 CREATE INDEX IF NOT EXISTS idx_portfolio_analytics_calculated_at ON portfolio_analytics (calculated_at);
 
 -- Create functions for updating timestamps
@@ -112,8 +114,7 @@ CREATE TRIGGER update_portfolio_transactions_updated_at BEFORE UPDATE ON portfol
 -- Create a view for portfolio summary
 CREATE OR REPLACE VIEW portfolio_summary AS
 SELECT 
-    up.id as portfolio_id,
-    up.user_id,
+    up.accountid,
     up.total_value,
     up.currency,
     up.tier1_allocation,

@@ -1,0 +1,350 @@
+# Portfolio Reader Service (portfolio-reader-svc) - AI Agent Documentation
+
+## Service Overview
+The portfolio-reader-svc microservice is a read-only service that provides access to user portfolio data from the user-portfolio-db. It serves as the primary interface for retrieving portfolio information, transaction history, and analytics for the Bank of Anthos investment system.
+
+## Core Functionality
+- **Portfolio Data Retrieval**: Fetches user portfolio information including allocations and values
+- **Transaction History**: Provides access to portfolio transaction records
+- **Analytics**: Calculates portfolio performance metrics and statistics
+- **Read-Only Operations**: All endpoints are GET requests for data retrieval only
+
+## API Endpoints
+
+### Health & Readiness
+- `GET /health` - Returns service health status
+- `GET /ready` - Checks database connectivity and service readiness
+
+### Portfolio Operations
+- `GET /api/v1/portfolio/{user_id}` - Get complete portfolio with recent transactions
+- `GET /api/v1/portfolio/{user_id}/transactions` - Get paginated transaction history
+- `GET /api/v1/portfolio/{user_id}/summary` - Get portfolio summary with analytics
+
+## Database Schema Integration
+
+### Tables Used
+1. **user_portfolios**: Main portfolio data
+   - `accountid` (VARCHAR(10)): Primary key
+   - `currency` (TEXT): Currency type (default USD)
+   - `tier1_allocation`, `tier2_allocation`, `tier3_allocation` (NUMERIC(5,2)): Percentage allocations
+   - `total_allocation` (NUMERIC(5,2)): Sum of tier allocations
+   - `tier1_value`, `tier2_value`, `tier3_value` (NUMERIC(15,2)): Current values
+   - `total_value` (NUMERIC(15,2)): Sum of tier values
+   - `created_at`, `updated_at` (TIMESTAMPTZ): Timestamps
+
+2. **portfolio_transactions**: Transaction history
+   - `id` (UUID): Primary key
+   - `accountid` (VARCHAR(10)): References user_portfolios
+   - `transaction_type` (VARCHAR(20)): 'INVEST' or 'WITHDRAWAL'
+   - `tier1_change`, `tier2_change`, `tier3_change` (NUMERIC(5,2)): Amount changes
+   - `total_amount` (NUMERIC(15,2)): Total transaction amount
+   - `fees` (NUMERIC(10,2)): Transaction fees
+   - `status` (VARCHAR(20)): 'PENDING', 'COMPLETED', 'FAILED', 'CANCELLED'
+   - `created_at`, `updated_at` (TIMESTAMPTZ): Timestamps
+
+## Request/Response Examples
+
+### Get Portfolio with Transactions
+```http
+GET /api/v1/portfolio/1234567890
+```
+
+Response:
+```json
+{
+  "portfolio": {
+    "accountid": "1234567890",
+    "currency": "USD",
+    "tier1_allocation": 60.0,
+    "tier2_allocation": 30.0,
+    "tier3_allocation": 10.0,
+    "total_allocation": 100.0,
+    "tier1_value": 6000.0,
+    "tier2_value": 3000.0,
+    "tier3_value": 1000.0,
+    "total_value": 10000.0,
+    "created_at": "2024-01-01T10:00:00Z",
+    "updated_at": "2024-01-01T10:05:00Z"
+  },
+  "transactions": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "transaction_type": "INVEST",
+      "tier1_change": 600.0,
+      "tier2_change": 300.0,
+      "tier3_change": 100.0,
+      "total_amount": 1000.0,
+      "fees": 0.0,
+      "status": "COMPLETED",
+      "created_at": "2024-01-01T10:00:00Z",
+      "updated_at": "2024-01-01T10:05:00Z"
+    }
+  ]
+}
+```
+
+### Get Portfolio Transactions (Paginated)
+```http
+GET /api/v1/portfolio/1234567890/transactions?limit=20&offset=0
+```
+
+Response:
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "transaction_type": "INVEST",
+    "tier1_change": 600.0,
+    "tier2_change": 300.0,
+    "tier3_change": 100.0,
+    "total_amount": 1000.0,
+    "fees": 0.0,
+    "status": "COMPLETED",
+    "created_at": "2024-01-01T10:00:00Z",
+    "updated_at": "2024-01-01T10:05:00Z"
+  }
+]
+```
+
+### Get Portfolio Summary with Analytics
+```http
+GET /api/v1/portfolio/1234567890/summary
+```
+
+Response:
+```json
+{
+  "accountid": "1234567890",
+  "currency": "USD",
+  "current_value": {
+    "total_value": 10000.0,
+    "tier1_value": 6000.0,
+    "tier2_value": 3000.0,
+    "tier3_value": 1000.0
+  },
+  "allocation": {
+    "tier1_allocation": 60.0,
+    "tier2_allocation": 30.0,
+    "tier3_allocation": 10.0,
+    "total_allocation": 100.0
+  },
+  "analytics": {
+    "total_invested": 9500.0,
+    "total_gain_loss": 500.0,
+    "gain_loss_percentage": 5.26,
+    "total_transactions": 5,
+    "invest_count": 4,
+    "withdrawal_count": 1,
+    "completed_count": 5
+  },
+  "timestamps": {
+    "created_at": "2024-01-01T10:00:00Z",
+    "updated_at": "2024-01-01T10:05:00Z"
+  }
+}
+```
+
+## Service Dependencies
+
+### Database
+- **user-portfolio-db**: PostgreSQL database containing portfolio and transaction data
+- **Connection String**: `postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db`
+
+### External Services
+- None (read-only service)
+
+## Environment Variables
+
+- `USER_PORTFOLIO_DB_URI`: PostgreSQL connection string
+- `PORT`: Service port (default: 8080)
+
+## Business Logic
+
+### Portfolio Retrieval
+1. **Query user_portfolios**: Fetch portfolio data by accountid
+2. **Fetch Recent Transactions**: Get last 10 transactions for context
+3. **Format Response**: Convert database records to JSON format
+4. **Error Handling**: Return 404 if portfolio not found
+
+### Transaction History
+1. **Validate Portfolio**: Check if portfolio exists
+2. **Pagination Support**: Handle limit/offset parameters
+3. **Order by Date**: Return transactions in descending order by created_at
+4. **Format Response**: Convert transaction records to JSON array
+
+### Portfolio Analytics
+1. **Calculate Metrics**: Compute total invested, gain/loss, percentages
+2. **Transaction Statistics**: Count transactions by type and status
+3. **Performance Analysis**: Calculate gain/loss percentage
+4. **Comprehensive Summary**: Combine current values, allocations, and analytics
+
+## Error Handling
+
+### Common Error Responses
+```json
+{
+  "error": "Portfolio not found"
+}
+```
+
+```json
+{
+  "error": "Database connection failed"
+}
+```
+
+### HTTP Status Codes
+- **200**: Success
+- **404**: Portfolio not found
+- **500**: Internal server error
+
+## Integration Patterns
+
+### Frontend Integration
+```javascript
+// Get portfolio data
+fetch('/api/v1/portfolio/1234567890')
+  .then(response => response.json())
+  .then(data => {
+    console.log('Portfolio:', data.portfolio);
+    console.log('Recent Transactions:', data.transactions);
+  });
+```
+
+### Service-to-Service Integration
+```python
+import requests
+
+def get_portfolio_summary(account_id):
+    response = requests.get(f'http://portfolio-reader-svc:8080/api/v1/portfolio/{account_id}/summary')
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"Failed to get portfolio: {response.status_code}")
+```
+
+### Investment Manager Integration
+The investment-manager-svc uses portfolio-reader-svc to:
+1. Retrieve current portfolio data before processing investments
+2. Get transaction history for user dashboard
+3. Calculate portfolio analytics for reporting
+
+## Performance Considerations
+
+### Database Queries
+- **Indexed Queries**: Uses accountid index for fast portfolio lookup
+- **Pagination**: Limits transaction queries to prevent large result sets
+- **Connection Pooling**: Reuses database connections efficiently
+
+### Caching Strategy
+- **No Built-in Caching**: Service is stateless and read-only
+- **External Caching**: Can be cached at API gateway or frontend level
+- **Real-time Data**: Always returns current database state
+
+## Security Considerations
+
+### Data Access
+- **Read-Only Service**: No modification operations
+- **No Authentication**: Relies on upstream services for auth
+- **SQL Injection Protection**: Uses parameterized queries
+
+### Data Privacy
+- **Account ID Validation**: Validates accountid format
+- **Error Information**: Doesn't expose sensitive database details
+
+## Monitoring & Observability
+
+### Health Checks
+- **Health Endpoint**: `/health` for basic service status
+- **Readiness Endpoint**: `/ready` for database connectivity
+
+### Logging
+- **Request Logging**: Logs all API requests
+- **Error Logging**: Detailed error information
+- **Performance Logging**: Database query timing
+
+### Metrics
+- **Response Times**: Track API endpoint performance
+- **Database Connections**: Monitor connection pool usage
+- **Error Rates**: Track 404/500 response rates
+
+## Deployment
+
+### Kubernetes Configuration
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-reader-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-reader-svc
+  template:
+    spec:
+      containers:
+      - name: portfolio-reader-svc
+        image: portfolio-reader-svc
+        ports:
+        - containerPort: 8080
+        env:
+        - name: USER_PORTFOLIO_DB_URI
+          value: "postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db"
+```
+
+### Environment-Specific Configuration
+- **Development**: Reduced resource limits
+- **Production**: Higher resource limits and multiple replicas
+- **Database**: Environment-specific connection strings
+
+## Testing
+
+### Unit Tests
+- **Database Mocking**: Mock database connections for testing
+- **API Endpoints**: Test all GET endpoints
+- **Error Scenarios**: Test 404 and 500 responses
+
+### Integration Tests
+- **Database Connectivity**: Test with real database
+- **End-to-End**: Test complete API workflows
+- **Performance**: Load testing for concurrent requests
+
+## Related Services
+
+### Upstream Dependencies
+- **user-portfolio-db**: PostgreSQL database service
+
+### Downstream Consumers
+- **investment-manager-svc**: Uses portfolio data for investment operations
+- **frontend**: Displays portfolio information to users
+- **withdraw-svc**: May need portfolio data for withdrawal validation
+
+### Data Flow
+```
+user-portfolio-db → portfolio-reader-svc → investment-manager-svc → frontend
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Database Connection Failed**: Check USER_PORTFOLIO_DB_URI
+2. **Portfolio Not Found**: Verify accountid exists in database
+3. **Slow Queries**: Check database indexes and query performance
+
+### Debug Commands
+```bash
+# Check service health
+curl http://portfolio-reader-svc:8080/health
+
+# Check readiness
+curl http://portfolio-reader-svc:8080/ready
+
+# Get portfolio data
+curl http://portfolio-reader-svc:8080/api/v1/portfolio/1234567890
+```
+
+### Log Analysis
+- **Database Errors**: Look for psycopg2 connection errors
+- **Query Performance**: Monitor database query execution times
+- **Memory Usage**: Check for memory leaks in long-running processes
