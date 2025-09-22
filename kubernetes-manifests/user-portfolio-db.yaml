@@ -79,7 +79,7 @@ spec:
                 name: environment-config
             - configMapRef:
                 name: demo-data-config
-          image: user-portfolio-db
+          image: gcr.io/ffd-gke10/user-portfolio-db:latest
           name: user-portfolio-db
           ports:
             - containerPort: 5432

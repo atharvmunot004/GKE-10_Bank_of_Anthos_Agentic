@@ -40,8 +40,8 @@ spec:
             drop:
               - all
           privileged: false
-          readOnlyRootFilesystem: true
-        image: frontend
+          readOnlyRootFilesystem: false
+        image: gcr.io/ffd-gke10/frontend:latest
         env:
         - name: VERSION
           value: "dev"
@@ -54,6 +54,8 @@ spec:
          # Valid levels are debug, info, warning, error, critical. If no valid level is set, gunicorn will default to info.
         - name: LOG_LEVEL
           value: "info"
+        - name: INVESTMENT_MANAGER_API_ADDR
+          value: "investment-manager-svc:8080"
         # Set to "true" to enable the CymbalBank logo + title
         # - name: CYMBAL_LOGO
         #   value: "false"

@@ -75,14 +75,27 @@ The following button opens up an interactive tutorial showing how to deploy Bank
 
    Creating the cluster may take a few minutes.
 
-5. Deploy Bank of Anthos to the cluster.
+5. Build and push Docker images to Google Container Registry.
+
+   ```sh
+   # Build and push custom microservice images
+   cd src/user-portfolio-db && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/user-portfolio-db:latest . && docker push gcr.io/${PROJECT_ID}/user-portfolio-db:latest
+   cd ../withdraw-svc && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/withdraw-svc:latest . && docker push gcr.io/${PROJECT_ID}/withdraw-svc:latest
+   cd ../invest-svc && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/invest-svc:latest . && docker push gcr.io/${PROJECT_ID}/invest-svc:latest
+   cd ../investment-manager-svc && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/investment-manager-svc:latest . && docker push gcr.io/${PROJECT_ID}/investment-manager-svc:latest
+   cd ../portfolio-reader-svc && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/portfolio-reader-svc:latest . && docker push gcr.io/${PROJECT_ID}/portfolio-reader-svc:latest
+   cd ../consistency-manager-svc && docker build --platform linux/amd64 -t gcr.io/${PROJECT_ID}/consistency-manager-svc:latest . && docker push gcr.io/${PROJECT_ID}/consistency-manager-svc:latest
+   cd ../..
+   ```
+
+6. Deploy Bank of Anthos to the cluster.
 
    ```sh
    kubectl apply -f ./extras/jwt/jwt-secret.yaml
    kubectl apply -f ./kubernetes-manifests
    ```
 
-6. Wait for the pods to be ready.
+7. Wait for the pods to be ready.
 
    ```sh
    kubectl get pods
@@ -103,7 +116,7 @@ The following button opens up an interactive tutorial showing how to deploy Bank
    userservice-78dc876bff-pdhtl          1/1     Running   0          96s
    ```
 
-7. Access the web frontend in a browser using the frontend's external IP.
+8. Access the web frontend in a browser using the frontend's external IP.
 
    ```sh
    kubectl get service frontend | awk '{print $4}'
@@ -111,7 +124,7 @@ The following button opens up an interactive tutorial showing how to deploy Bank
 
    Visit `http://EXTERNAL_IP` in a web browser to access your instance of Bank of Anthos.
 
-8. Once you are done with it, delete the GKE cluster.
+9. Once you are done with it, delete the GKE cluster.
 
    ```sh
    gcloud container clusters delete bank-of-anthos \
