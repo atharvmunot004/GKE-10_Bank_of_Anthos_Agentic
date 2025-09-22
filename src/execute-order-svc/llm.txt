@@ -1,0 +1,306 @@
+microservice-description: {
+    request-received: {
+        asset-id,
+        asset-type,
+        tier_number
+        asset-name,
+        amount_trade,
+        price,
+        purpose: BUY / SELL
+
+    },
+    environment_variables_used: {
+        TIER1: "current change to be done in the pool",
+        TIER2: "current change to be done in the pool",
+        TIER3: "current change to be done in the pool"
+    },
+    environment_variables_updated: { (created if not already present)
+        TIER1_MV: "sum of (amount * price_per_unit) for all the entries in assets-db where tier_number == 1",
+        TIER2_MV: "sum of (amount * price_per_unit) for all the entries in assets-db where tier_number == 2",
+        TIER3_MV: "sum of (amount * price_per_unit) for all the entries in assets-db where tier_number == 3"
+    },
+    task: {
+        "update environment variables TIER1_MV, TIER2_MV, TIER3_MV",
+        "based on the request received (BUY/ SELL)": {
+            BUY: {
+                "if the asset-id is present in assets-db, retrive the row"
+                "if environment variable of the tier_number (i.e TIER1 or TIER2 or TIER3) >= about * price; proceed, else return the error stating insufficient funds",
+                "based on a realistic probability of the price * amount_trade mentioned in the request and the price_per_unit * amount in the entry of assets-db return ORDER-EXECUTED or ORDER-FAILED",
+                "create a row in assets-db if not previously present",
+                "update the row in assets-db with the new amount (amount + amount_trade) of that particular asset if successful order exectuing"
+            },
+            SELL: {
+                "if the asset-id is present in assets-db, retrive the row",
+                "if the amount * price (from the request) <= amount_trade * price_per_unit (from the entry in assets-db); proceed, else return the error stating insufficient assets",
+                "based on a realistic probability of the price * amount_trade mentioned in the request and the price_per_unit * amount in the entry of assets-db return ORDER-EXECUTED or ORDER-FAILED",
+                "update the row in assets-db with the new amount (amount - amount_trade) of that particular asset if successful order exectuing"
+            }
+        }
+    }
+}
+----append content after this----
+
+# Execute Order Service (execute-order-svc) - AI Agent Documentation
+
+## Service Overview
+The Execute Order Service processes buy and sell orders for assets in the Bank of Anthos trading system. This service manages asset inventory, executes trades based on realistic market conditions, and maintains tier pool funds for order execution.
+
+## Core Functionality
+
+### Primary Task
+Process buy and sell orders for assets across three tiers, managing pool funds, calculating execution probabilities, updating asset inventories in assets-db, and maintaining real-time tier market values.
+
+### Order Types
+- **BUY**: Purchase assets using tier pool funds
+- **SELL**: Sell assets from existing inventory
+
+### Asset Tiers
+- **Tier 1**: High-risk assets (cryptocurrencies) - Pool: $1M
+- **Tier 2**: Medium-risk assets (ETFs, mutual funds, equities) - Pool: $2M
+- **Tier 3**: Low-risk assets (bonds, stable investments) - Pool: $500K
+
+## API Endpoints
+
+### Health & Readiness
+- `GET /health` - Service health check
+- `GET /ready` - Service readiness check (includes database connectivity)
+
+### Order Operations
+- `POST /api/v1/execute-order` - Execute buy or sell orders
+- `GET /api/v1/tier-status` - Get current tier pool and market value status
+
+## Request Format
+
+### Order Execution Request
+```json
+{
+  "asset_id": "BTC001",
+  "asset_type": "CRYPTO",
+  "tier_number": 1,
+  "asset_name": "Bitcoin",
+  "amount_trade": 100.0,
+  "price": 50000.0,
+  "purpose": "BUY"
+}
+```
+
+## Response Format
+
+### Successful Order Execution
+```json
+{
+  "status": "executed",
+  "order_id": "uuid-string",
+  "asset_id": "BTC001",
+  "asset_name": "Bitcoin",
+  "amount_traded": 100.0,
+  "price_executed": 50000.0,
+  "total_value": 5000000.0,
+  "new_amount": 100.0,
+  "execution_probability": 0.85,
+  "message": "BUY order executed successfully",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "tier_number": 1,
+  "asset_type": "CRYPTO",
+  "updated_tier_values": {
+    "TIER1_MV": 5000000.0,
+    "TIER2_MV": 2000000.0,
+    "TIER3_MV": 500000.0
+  }
+}
+```
+
+### Failed Order Execution
+```json
+{
+  "status": "failed",
+  "error": "insufficient_funds",
+  "message": "Insufficient funds in tier 1 pool. Required: 5000000, Available: 1000000",
+  "required_amount": 5000000.0,
+  "available_amount": 1000000.0,
+  "timestamp": "2024-01-01T10:00:00Z",
+  "tier_number": 1,
+  "asset_type": "CRYPTO"
+}
+```
+
+## Order Execution Logic
+
+### BUY Order Process
+1. **Fund Verification**: Check if tier pool has sufficient funds
+2. **Asset Lookup**: Retrieve existing asset from assets-db (if exists)
+3. **Probability Calculation**: Calculate execution probability based on:
+   - Price difference between request and market
+   - Volume ratio between request and available
+   - Market liquidity conditions
+4. **Execution Decision**: Execute if random probability check passes
+5. **Database Update**: Update asset amount or create new asset
+6. **Tier Value Update**: Recalculate tier market values
+
+### SELL Order Process
+1. **Asset Verification**: Check if asset exists in assets-db
+2. **Inventory Check**: Verify sufficient assets to sell
+3. **Probability Calculation**: Calculate execution probability
+4. **Execution Decision**: Execute if random probability check passes
+5. **Database Update**: Reduce asset amount in inventory
+6. **Tier Value Update**: Recalculate tier market values
+
+## Environment Variables
+
+### Tier Pool Configuration
+- `TIER1`: Available funds for tier 1 assets (default: 1000000.0)
+- `TIER2`: Available funds for tier 2 assets (default: 2000000.0)
+- `TIER3`: Available funds for tier 3 assets (default: 500000.0)
+
+### Calculated Market Values (Auto-updated)
+- `TIER1_MV`: Sum of (amount * price_per_unit) for all tier 1 assets
+- `TIER2_MV`: Sum of (amount * price_per_unit) for all tier 2 assets
+- `TIER3_MV`: Sum of (amount * price_per_unit) for all tier 3 assets
+
+### Service Configuration
+- `ASSETS_DB_URI`: PostgreSQL connection string
+- `PORT`: Service port (default: 8080)
+- `REQUEST_TIMEOUT`: HTTP request timeout (default: 30)
+
+## Database Integration
+
+### Assets Database (assets-db)
+- **Reads**: Asset information by ID
+- **Updates**: Asset amounts and timestamps
+- **Creates**: New assets for first-time purchases
+
+### Database Operations
+```sql
+-- Get asset by ID
+SELECT asset_id, tier_number, asset_name, amount, price_per_unit, last_updated
+FROM assets WHERE asset_id = %s
+
+-- Create new asset
+INSERT INTO assets (asset_id, tier_number, asset_name, amount, price_per_unit, last_updated)
+VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+
+-- Update asset amount
+UPDATE assets 
+SET amount = %s, last_updated = CURRENT_TIMESTAMP
+WHERE asset_id = %s
+
+-- Calculate tier market values
+SELECT COALESCE(SUM(amount * price_per_unit), 0) as market_value
+FROM assets WHERE tier_number = %s
+```
+
+## Execution Probability Algorithm
+
+The service uses a realistic probability calculation for order execution:
+
+### Factors Considered
+1. **Price Factor**: Based on price difference between request and market
+   - Lower price difference = higher probability
+   - Formula: `max(0.1, 1.0 - (price_diff * 2))`
+
+2. **Volume Factor**: Based on volume ratio between request and available
+   - Higher volume ratio = higher probability
+   - Formula: `max(0.2, min(request_vol, market_vol) / max(request_vol, market_vol))`
+
+3. **Liquidity Factor**: Random market condition simulation
+   - Simulates real market liquidity conditions
+   - Range: 0.7 to 1.0
+
+4. **Combined Probability**: `price_factor * volume_factor * liquidity_factor`
+   - Final range: 0.05 to 0.95
+
+## Error Handling
+
+### Common Error Scenarios
+- **insufficient_funds**: Not enough pool funds for BUY orders
+- **insufficient_assets**: Not enough assets for SELL orders
+- **asset_not_found**: Asset doesn't exist for SELL orders
+- **order_rejected**: Order rejected due to market conditions
+- **database_error**: Database operation failures
+- **invalid_tier**: Tier number not 1, 2, or 3
+- **invalid_purpose**: Purpose not BUY or SELL
+- **invalid_amount_or_price**: Negative or zero values
+
+### HTTP Status Codes
+- **200**: Order executed successfully
+- **400**: Order failed (business logic error)
+- **500**: Service error (system failure)
+
+## Integration Points
+
+### Dependencies
+- **assets-db**: Primary database for asset inventory
+- **PostgreSQL**: Database driver (psycopg2)
+
+### Service Communication
+- **Input**: Order requests from trading services
+- **Output**: Order execution results and status updates
+- **Database**: Real-time inventory updates
+
+## Usage Examples for AI Agents
+
+### 1. Execute BUY Order
+```bash
+curl -X POST http://execute-order-svc:8080/api/v1/execute-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_id": "BTC001",
+    "asset_type": "CRYPTO",
+    "tier_number": 1,
+    "asset_name": "Bitcoin",
+    "amount_trade": 100.0,
+    "price": 50000.0,
+    "purpose": "BUY"
+  }'
+```
+
+### 2. Execute SELL Order
+```bash
+curl -X POST http://execute-order-svc:8080/api/v1/execute-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_id": "BTC001",
+    "asset_type": "CRYPTO",
+    "tier_number": 1,
+    "asset_name": "Bitcoin",
+    "amount_trade": 50.0,
+    "price": 50000.0,
+    "purpose": "SELL"
+  }'
+```
+
+### 3. Check Tier Status
+```bash
+curl -X GET http://execute-order-svc:8080/api/v1/tier-status
+```
+
+## AI Agent Decision Making Support
+
+### Order Execution Strategy
+- Use `execution_probability` to assess order success likelihood
+- Monitor `tier_pools` for available funds before placing BUY orders
+- Check `tier_market_values` for portfolio valuation
+- Consider `updated_tier_values` for post-execution portfolio state
+
+### Risk Management
+- **High Probability Orders**: Execute when probability > 0.8
+- **Medium Probability Orders**: Execute when probability > 0.6
+- **Low Probability Orders**: Consider alternative strategies
+
+### Portfolio Optimization
+- Use tier market values for portfolio rebalancing
+- Monitor execution results for strategy adjustments
+- Track order success rates for future planning
+
+## Performance Characteristics
+- **Response Time**: < 1 second for typical orders
+- **Execution Accuracy**: Realistic market simulation
+- **Database Efficiency**: Optimized queries with proper indexing
+- **Scalability**: Stateless design supports horizontal scaling
+
+## Monitoring and Health
+- Health endpoint for service monitoring
+- Readiness check includes database connectivity
+- Comprehensive logging for order tracking
+- Error tracking and reporting capabilities
+- Real-time tier value calculations

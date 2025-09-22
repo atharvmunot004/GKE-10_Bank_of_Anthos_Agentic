@@ -21,6 +21,11 @@ BATCH_SIZE = int(os.environ.get('BATCH_SIZE', '10'))
 REQUEST_TIMEOUT = int(os.environ.get('REQUEST_TIMEOUT', '30'))
 POLLING_INTERVAL = int(os.environ.get('POLLING_INTERVAL', '5'))
 
+# Global tier variables (step5)
+TIER1 = float(os.environ.get('TIER1', '1000000.0'))
+TIER2 = float(os.environ.get('TIER2', '2000000.0'))
+TIER3 = float(os.environ.get('TIER3', '500000.0'))
+
 # Global variables for batch processing
 request_queue = []
 processing_lock = threading.Lock()
@@ -134,6 +139,35 @@ def call_bank_asset_agent(T1, T2, T3):
         logger.error(f"Failed to call bank-asset-agent: {e}")
         return 'FAILED'
 
+def update_global_tier_variables(tier_changes):
+    """Update global environment variables TIER1, TIER2, TIER3 (step5)."""
+    global TIER1, TIER2, TIER3
+    
+    try:
+        # Calculate new tier values
+        new_tier1 = TIER1 + tier_changes['T1']
+        new_tier2 = TIER2 + tier_changes['T2']
+        new_tier3 = TIER3 + tier_changes['T3']
+        
+        # Update global variables
+        TIER1 = new_tier1
+        TIER2 = new_tier2
+        TIER3 = new_tier3
+        
+        # Update environment variables
+        os.environ['TIER1'] = str(TIER1)
+        os.environ['TIER2'] = str(TIER2)
+        os.environ['TIER3'] = str(TIER3)
+        
+        logger.info(f"Updated global tier variables: TIER1={TIER1}, TIER2={TIER2}, TIER3={TIER3}")
+        logger.info(f"Applied tier changes: T1={tier_changes['T1']}, T2={tier_changes['T2']}, T3={tier_changes['T3']}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to update global tier variables: {e}")
+        return False
+
 def update_request_status(uuid_list, status):
     """Update status of requests in queue-db."""
     try:
@@ -177,6 +211,13 @@ def process_batch():
             
             # Call bank-asset-agent
             status = call_bank_asset_agent(T1, T2, T3)
+            
+            # Step5: Update global tier variables if we get positive status
+            if status == 'SUCCESS' or status == 'DONE' or status == 'COMPLETED':
+                tier_changes = {'T1': T1, 'T2': T2, 'T3': T3}
+                update_success = update_global_tier_variables(tier_changes)
+                if not update_success:
+                    logger.error("Failed to update global tier variables, but continuing with request status update")
             
             # Update request statuses
             uuid_list = [req['uuid'] for req in requests_data]

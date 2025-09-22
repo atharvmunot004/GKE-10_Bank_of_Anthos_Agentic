@@ -64,5 +64,8 @@ requires:
 - configs:
   - market-reader-svc
   path: src/market-reader-svc/skaffold.yaml
+- configs:
+  - execute-order-svc
+  path: src/execute-order-svc/skaffold.yaml
 deploy:
   tolerateFailuresUntilDeadline: true

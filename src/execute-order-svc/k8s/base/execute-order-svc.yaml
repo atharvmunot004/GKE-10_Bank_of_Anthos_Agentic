@@ -1,37 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: user-request-queue-svc
+  name: execute-order-svc
   labels:
-    app: user-request-queue-svc
+    app: execute-order-svc
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: user-request-queue-svc
+      app: execute-order-svc
   template:
     metadata:
       labels:
-        app: user-request-queue-svc
+        app: execute-order-svc
     spec:
       containers:
-      - name: user-request-queue-svc
-        image: user-request-queue-svc
+      - name: execute-order-svc
+        image: execute-order-svc
         ports:
         - containerPort: 8080
         env:
-        - name: QUEUE_DB_URI
-          value: "postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db"
-        - name: BANK_ASSET_AGENT_URI
-          value: "http://bank-asset-agent:8080"
-        - name: BATCH_SIZE
-          value: "10"
-        - name: REQUEST_TIMEOUT
-          value: "30"
-        - name: POLLING_INTERVAL
-          value: "5"
+        - name: ASSETS_DB_URI
+          value: "postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db"
         - name: PORT
           value: "8080"
+        - name: REQUEST_TIMEOUT
+          value: "30"
         - name: TIER1
           value: "1000000.0"
         - name: TIER2
@@ -61,12 +55,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: user-request-queue-svc
+  name: execute-order-svc
   labels:
-    app: user-request-queue-svc
+    app: execute-order-svc
 spec:
   selector:
-    app: user-request-queue-svc
+    app: execute-order-svc
   ports:
   - port: 8080
     targetPort: 8080

@@ -37,6 +37,251 @@ microservice-description:
         }
     },
     step5: {
+        description: "Update the global environment variables names TIER1, TIER2, TIER3 once we get a positive status from the previous step"
+    }
+    step6: {
         description: "Based on the response status of bank-asset-agent, it updates the status of these 10 uuids in queue-db as 'DONE' or 'FAILED'"
     }
 }
+----append your content after this----
+
+# User Request Queue Service (user-request-queue-svc) - AI Agent Documentation
+
+## Service Overview
+The User Request Queue Service processes investment and withdrawal requests in batches, manages queue operations, and coordinates with the bank-asset-agent to execute tier-based financial operations.
+
+## Core Functionality
+
+### Step-by-Step Process
+1. **Step 1**: Adds requests to queue-db with PROCESSING status
+2. **Step 2**: Pools 10 requests and calculates aggregate tier values (T1, T2, T3)
+3. **Step 3**: Aggregates tier amounts (INVEST adds, WITHDRAW subtracts)
+4. **Step 4**: Makes request to bank-asset-agent with T1, T2, T3 values
+5. **Step 5**: Updates global environment variables TIER1, TIER2, TIER3 on positive status
+6. **Step 6**: Updates request statuses in queue-db based on bank-asset-agent response
+
+## Step 5 Implementation
+
+### Global Tier Variable Updates
+When bank-asset-agent returns a positive status (SUCCESS, DONE, COMPLETED), the service updates:
+- **TIER1**: Global tier 1 pool value
+- **TIER2**: Global tier 2 pool value  
+- **TIER3**: Global tier 3 pool value
+
+### Environment Variable Management
+- **Initial Values**: TIER1=1000000.0, TIER2=2000000.0, TIER3=500000.0
+- **Dynamic Updates**: Values are updated based on aggregate tier changes from batch processing
+- **Persistence**: Updates both global variables and environment variables
+
+## API Endpoints
+
+### Health & Readiness
+- `GET /health` - Service health check
+- `GET /ready` - Service readiness check (includes database and bank-asset-agent connectivity)
+
+### Queue Operations
+- `POST /api/v1/queue` - Add request to processing queue
+- `GET /api/v1/queue/{uuid}` - Get request status by UUID
+- `GET /api/v1/queue/stats` - Get queue statistics
+
+### Step 5 Monitoring
+- `GET /api/v1/tier-values` - Get current global tier values and environment variables
+
+## Request Format
+
+### Add to Queue
+```json
+{
+  "uuid": "request-uuid",
+  "tier1": 600.0,
+  "tier2": 300.0,
+  "tier3": 100.0,
+  "purpose": "INVEST",
+  "accountid": "1234567890"
+}
+```
+
+## Response Format
+
+### Queue Status
+```json
+{
+  "uuid": "request-uuid",
+  "accountid": "1234567890",
+  "tier1": 600.0,
+  "tier2": 300.0,
+  "tier3": 100.0,
+  "purpose": "INVEST",
+  "status": "PROCESSING",
+  "created_at": "2024-01-01T10:00:00Z",
+  "updated_at": "2024-01-01T10:00:00Z"
+}
+```
+
+### Tier Values (Step 5 Monitoring)
+```json
+{
+  "status": "success",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "tier_values": {
+    "TIER1": 1000000.0,
+    "TIER2": 2000000.0,
+    "TIER3": 500000.0
+  },
+  "environment_variables": {
+    "TIER1": "1000000.0",
+    "TIER2": "2000000.0",
+    "TIER3": "500000.0"
+  }
+}
+```
+
+## Environment Variables
+
+### Service Configuration
+- `QUEUE_DB_URI`: PostgreSQL connection string for queue-db
+- `BANK_ASSET_AGENT_URI`: Bank asset agent service URL
+- `BATCH_SIZE`: Number of requests to process in each batch (default: 10)
+- `REQUEST_TIMEOUT`: HTTP request timeout (default: 30)
+- `POLLING_INTERVAL`: Background processing interval (default: 5)
+
+### Global Tier Variables (Step 5)
+- `TIER1`: Tier 1 pool value (default: 1000000.0)
+- `TIER2`: Tier 2 pool value (default: 2000000.0)
+- `TIER3`: Tier 3 pool value (default: 500000.0)
+
+## Database Integration
+
+### Queue Database (queue-db)
+- **Table**: withdrawal_queue
+- **Operations**: INSERT (step1), UPDATE (step6)
+- **Fields**: uuid, accountid, tier1, tier2, tier3, purpose, status, created_at, updated_at
+
+### Database Operations
+```sql
+-- Add request to queue (step1)
+INSERT INTO withdrawal_queue (uuid, accountid, tier1, tier2, tier3, purpose, status, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, 'PROCESSING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+
+-- Get pending requests for batch processing
+SELECT uuid, accountid, tier1, tier2, tier3, purpose FROM withdrawal_queue WHERE status = 'PROCESSING' LIMIT 10
+
+-- Update request status (step6)
+UPDATE withdrawal_queue SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE uuid = %s
+```
+
+## Step 5 Implementation Details
+
+### Tier Calculation Logic
+```python
+def update_global_tier_variables(tier_changes):
+    global TIER1, TIER2, TIER3
+    
+    # Calculate new tier values
+    new_tier1 = TIER1 + tier_changes['T1']
+    new_tier2 = TIER2 + tier_changes['T2']
+    new_tier3 = TIER3 + tier_changes['T3']
+    
+    # Update global variables and environment
+    TIER1 = new_tier1
+    TIER2 = new_tier2
+    TIER3 = new_tier3
+    
+    os.environ['TIER1'] = str(TIER1)
+    os.environ['TIER2'] = str(TIER2)
+    os.environ['TIER3'] = str(TIER3)
+```
+
+### Batch Processing Flow
+1. **Collect**: Gather 10 pending requests
+2. **Calculate**: Aggregate tier values (T1, T2, T3)
+3. **Call**: Send to bank-asset-agent
+4. **Update**: If positive response, update global tier variables (step5)
+5. **Status**: Update request statuses in database (step6)
+
+## Integration Points
+
+### Dependencies
+- **queue-db**: PostgreSQL database for request queue management
+- **bank-asset-agent**: External service for tier processing
+- **PostgreSQL**: Database driver (psycopg2)
+
+### Service Communication
+- **Input**: Investment/withdrawal requests from other services
+- **Output**: Queue status updates and tier value changes
+- **External**: Calls to bank-asset-agent for processing
+
+## Usage Examples for AI Agents
+
+### 1. Add Investment Request to Queue
+```bash
+curl -X POST http://user-request-queue-svc:8080/api/v1/queue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "uuid": "invest-001",
+    "tier1": 1000.0,
+    "tier2": 2000.0,
+    "tier3": 500.0,
+    "purpose": "INVEST",
+    "accountid": "1234567890"
+  }'
+```
+
+### 2. Add Withdrawal Request to Queue
+```bash
+curl -X POST http://user-request-queue-svc:8080/api/v1/queue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "uuid": "withdraw-001",
+    "tier1": 500.0,
+    "tier2": 1000.0,
+    "tier3": 250.0,
+    "purpose": "WITHDRAW",
+    "accountid": "1234567890"
+  }'
+```
+
+### 3. Check Request Status
+```bash
+curl -X GET http://user-request-queue-svc:8080/api/v1/queue/invest-001
+```
+
+### 4. Monitor Tier Values (Step 5)
+```bash
+curl -X GET http://user-request-queue-svc:8080/api/v1/tier-values
+```
+
+### 5. Get Queue Statistics
+```bash
+curl -X GET http://user-request-queue-svc:8080/api/v1/queue/stats
+```
+
+## AI Agent Decision Making Support
+
+### Queue Management
+- Monitor queue statistics for processing capacity
+- Track request statuses for completion confirmation
+- Use tier values for portfolio balance monitoring
+
+### Step 5 Monitoring
+- Check tier values before placing new requests
+- Monitor tier changes after batch processing
+- Use environment variables for service coordination
+
+### Batch Processing Insights
+- Understand batch size and processing intervals
+- Monitor bank-asset-agent integration status
+- Track aggregate tier calculations
+
+## Performance Characteristics
+- **Batch Processing**: Processes 10 requests at a time
+- **Background Processing**: Continuous polling every 5 seconds
+- **Tier Updates**: Real-time global variable updates
+- **Database Efficiency**: Optimized queries with proper indexing
+
+## Monitoring and Health
+- Health endpoint for service monitoring
+- Readiness check includes external service connectivity
+- Comprehensive logging for batch processing
+- Tier value monitoring endpoint
+- Queue statistics and status tracking
