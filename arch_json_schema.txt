@@ -1,23 +1,21 @@
 # Caller json like format
 
-[
+{
 	"loadgen" : [ "frontend" ],
-	"frontend" : [ "userservice", "contacts", "ledger writer", "balance reader", "transaction history", "investment-manager-svc" ],
+	"frontend" : [ "userservice", "contacts", "ledgerwriter", "balancereader", "transactionhistory", "investment-manager-svc" ],
 	"userservice" : [ "account-db" ],
 	"contacts" : [ "account-db" ],
-	"ledger writer" : [ "ledger-db" ],
-	"balance reader" : [ "ledger-db", "user-tier-agent" ],
-	"transaction history" : [ "ledger-db", "user-tier-agent" ],
-	"bank-asset-agent" : [ "market-reader-svc", "rule-checker-svc", "execute-order-svc", "assets-db" ],
-	"assets-db" : [ "bank-asset-agent", "rule-checker-svc" ],
-	"user-tier-agent" : [ "user-request-queue-svc" ],
-	"investments-record-reader-svc" : [ "portfolio-transaction-table" ],
-	"investment-manager-svc" : [ "investments-record-reader-svc", "user-portfolio-svc", "invest-svc", "withdraw-svc" ],
-	"execute-order-svc" : [ "bank-asset-agent", "rule-checker-svc" ],
-	"user-request-queue-svc" : [ "bank-asset-agent", "rule-checker-svc", "queue-db" ],
-	"user-portfolio-svc" : [ "user-portfolio-table" ],
-	"invest-svc" : [ "user-portfolio-table", "user-tier-agent", "portfolio-transaction-table" ],
-	"withdraw-svc" : [ "portfolio-transaction-table", "user-portfolio-table", "user-request-queue-svc", "user-return-rules-agent" ],
-	"rule-checker-svc" : [ "bank-asset-agent", "execute-order-svc" ],
-	"portfolio-transaction-table" : [ "user-return-rules-agent" ]
-]
+	"ledgerwriter" : [ "ledger-db" ],
+	"balancereader" : [ "ledger-db" ],
+	"transactionhistory" : [ "ledger-db" ],
+	"investment-manager-svc" : [ "portfolio-reader-svc", "invest-svc", "withdraw-svc", "ledgerwriter" ],
+	"portfolio-reader-svc": ["user-portfolio-db:user-portfolios", "user-portfolio-db:portfolio-transactions"],
+	"invest-svc": [ "balancereader", "user-tier-agent",  "user-portfolio-db:user-portfolios", "user-portfolio-db:portfolio-transaction" ],
+	"withdraw-svc": [ "user-portfolio-db:user-portfolios", "user-tier-agent", "user-portfolio-db:user-portfolios", "user-portfolio-db:portfolio-transaction" ],
+	"user-tier-agent" : [ "user-request-queue-svc", "ledger-db" ],
+	"user-request-queue-svc" : [ "bank-asset-agent", "queue-db:investment_queue", "queue-db:withdrawal_queue" ],
+	"bank-asset-agent": [ "assets-db", "market-reader-svc", "execute-order-svc" ],
+	"market-reader-svc": [ "assets-db" ],
+	"execute-order-svc": [ "assets-db" ],
+	"consistency-manager-svc": [ "queue-db:investment_queue", "queue-db:withdrawal_queue", "user-portfolio-db:user-portfolios", "user-portfolio-db:portfolio-transaction" ]
+}
