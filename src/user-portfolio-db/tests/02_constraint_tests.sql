@@ -8,9 +8,9 @@ DECLARE
 BEGIN
     -- Test valid allocation (should pass)
     BEGIN
-        INSERT INTO user_portfolios (user_id, total_value, tier1_allocation, tier2_allocation, tier3_allocation, tier1_value, tier2_value, tier3_value)
-        VALUES ('test-user-1', 1000.00, 50.0, 30.0, 20.0, 500.00, 300.00, 200.00);
-        DELETE FROM user_portfolios WHERE user_id = 'test-user-1';
+        INSERT INTO user_portfolios (accountid, total_value, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value)
+        VALUES ('test-user-1', 1000.00, 50.0, 30.0, 20.0, 100.0, 500.00, 300.00, 200.00);
+        DELETE FROM user_portfolios WHERE accountid = 'test-user-1';
         RAISE NOTICE 'PASS: Valid allocation (50+30+20=100) accepted';
     EXCEPTION WHEN OTHERS THEN
         test_passed := FALSE;
@@ -19,8 +19,8 @@ BEGIN
     
     -- Test invalid allocation (should fail)
     BEGIN
-        INSERT INTO user_portfolios (user_id, total_value, tier1_allocation, tier2_allocation, tier3_allocation, tier1_value, tier2_value, tier3_value)
-        VALUES ('test-user-2', 1000.00, 50.0, 30.0, 25.0, 500.00, 300.00, 250.00);
+        INSERT INTO user_portfolios (accountid, total_value, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value)
+        VALUES ('test-user-2', 1000.00, 50.0, 30.0, 25.0, 105.0, 500.00, 300.00, 250.00);
         test_passed := FALSE;
         RAISE NOTICE 'FAIL: Invalid allocation (50+30+25=105) was accepted';
     EXCEPTION WHEN check_violation THEN
@@ -43,8 +43,8 @@ DECLARE
 BEGIN
     -- Test negative allocation (should fail)
     BEGIN
-        INSERT INTO user_portfolios (user_id, total_value, tier1_allocation, tier2_allocation, tier3_allocation, tier1_value, tier2_value, tier3_value)
-        VALUES ('test-user-3', 1000.00, -10.0, 60.0, 50.0, -100.00, 600.00, 500.00);
+        INSERT INTO user_portfolios (accountid, total_value, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value)
+        VALUES ('test-user-3', 1000.00, -10.0, 60.0, 50.0, 100.0, -100.00, 600.00, 500.00);
         test_passed := FALSE;
         RAISE NOTICE 'FAIL: Negative allocation was accepted';
     EXCEPTION WHEN check_violation THEN
@@ -79,14 +79,14 @@ DECLARE
 BEGIN
     -- Test valid transaction type (should pass)
     BEGIN
-        INSERT INTO user_portfolios (id, user_id, total_value, tier1_allocation, tier2_allocation, tier3_allocation, tier1_value, tier2_value, tier3_value)
-        VALUES ('test-portfolio-1', 'test-user-5', 1000.00, 50.0, 30.0, 20.0, 500.00, 300.00, 200.00);
+        INSERT INTO user_portfolios (accountid, total_value, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value)
+        VALUES ('test-user-5', 1000.00, 50.0, 30.0, 20.0, 100.0, 500.00, 300.00, 200.00);
         
-        INSERT INTO portfolio_transactions (portfolio_id, transaction_type, total_amount)
-        VALUES ('test-portfolio-1', 'ALLOCATION_CHANGE', 0.00);
+        INSERT INTO portfolio_transactions (accountid, transaction_type, total_amount)
+        VALUES ('test-user-5', 'INVEST', 100.00);
         
-        DELETE FROM portfolio_transactions WHERE portfolio_id = 'test-portfolio-1';
-        DELETE FROM user_portfolios WHERE id = 'test-portfolio-1';
+        DELETE FROM portfolio_transactions WHERE accountid = 'test-user-5';
+        DELETE FROM user_portfolios WHERE accountid = 'test-user-5';
         RAISE NOTICE 'PASS: Valid transaction type accepted';
     EXCEPTION WHEN OTHERS THEN
         test_passed := FALSE;
@@ -95,11 +95,11 @@ BEGIN
     
     -- Test invalid transaction type (should fail)
     BEGIN
-        INSERT INTO user_portfolios (id, user_id, total_value, tier1_allocation, tier2_allocation, tier3_allocation, tier1_value, tier2_value, tier3_value)
-        VALUES ('test-portfolio-2', 'test-user-6', 1000.00, 50.0, 30.0, 20.0, 500.00, 300.00, 200.00);
+        INSERT INTO user_portfolios (accountid, total_value, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value)
+        VALUES ('test-user-6', 1000.00, 50.0, 30.0, 20.0, 100.0, 500.00, 300.00, 200.00);
         
-        INSERT INTO portfolio_transactions (portfolio_id, transaction_type, total_amount)
-        VALUES ('test-portfolio-2', 'INVALID_TYPE', 0.00);
+        INSERT INTO portfolio_transactions (accountid, transaction_type, total_amount)
+        VALUES ('test-user-6', 'INVALID_TYPE', 0.00);
         
         test_passed := FALSE;
         RAISE NOTICE 'FAIL: Invalid transaction type was accepted';
