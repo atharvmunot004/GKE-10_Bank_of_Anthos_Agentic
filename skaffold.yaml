@@ -43,5 +43,20 @@ requires:
 - configs:
   - queue-db
   path: src/queue-db/skaffold.yaml
+- configs:
+  - investment-manager-svc
+  path: src/investment-manager-svc/skaffold.yaml
+- configs:
+  - invest-svc
+  path: src/invest-svc/skaffold.yaml
+- configs:
+  - portfolio-reader-svc
+  path: src/portfolio-reader-svc/skaffold.yaml
+- configs:
+  - user-portfolio-db
+  path: src/user-portfolio-db/skaffold.yaml
+- configs:
+  - withdraw-svc
+  path: src/withdraw-svc/skaffold.yaml
 deploy:
   tolerateFailuresUntilDeadline: true

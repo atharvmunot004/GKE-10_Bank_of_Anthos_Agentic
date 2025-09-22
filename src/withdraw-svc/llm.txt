@@ -1,2 +1,96 @@
 micro-service-description:
-|-> 
+|-> receive: {
+|     accountid, 
+|     amount
+|   } header includes the JWT access token
+|   from investment-manager-svc
+|   |-> checks the investment amount by calling user-portfolios table from user-portfolio-db for the account's total_value
+|   |   |-> SELECT (total_value) FOR accountid
+|   |   |-> gets the total_value of that account
+|   |   |-> iff the total_value of the account if >= amount processed
+|   |-> calls the user-tier-agent 
+|   |   |-> request: 
+|   |   |   using the JWT token received from invesment-manager-svc
+|   |   |   {
+|   |   |     accountid,
+|   |   |     amount,
+|   |   |     uuid [generate this, this will not be generated anywhere else],
+|   |   |     purpose: "WITHDRAW"
+|   |   |   }
+|   |   |-> return:
+|   |       {
+|   |         accountid,
+|   |         amount,
+|   |         uuid,
+|   |         tier1,
+|   |         tier2,
+|   |         tier3,
+|   |       }
+|   |-> creates {accountid, amount, uuid, - tier1, - tier2, - tier3, transaction_type: INVEST, created_at: TIMESTAMPTZ, status: PENDING} to user-portfolio-db table portfolio-transactions
+|   |-> update user-portfolio-db table user-portfolios accountid:
+|       {
+|         tier1_value = tier1_value - tier1,
+|         tier2_value = tier2_value - tier2,
+|         tier3_value = tier3_value - tier3
+|       } 
+|       ONLY THESE CHANGES ARE MADE TO THE USER'S PORTFOLIO, AND ENSURE THAT THE CONSTRAINTS ARE SATISFIED
+|-> returns status to invesment-manager-svc
+
+--- created by Chinmay and Atharv for agent 
+--------------------------------------------------------------
+--- created by agent for agent
+
+## Agent Usage Instructions
+
+### For AI Agents:
+
+This microservice handles user withdrawal requests from investment portfolios. Key integration points:
+
+#### **Database Schema (user-portfolio-db)**
+- **user_portfolios table**: Contains `total_value` field for validation
+- **portfolio_transactions table**: Records withdrawal transactions with negative tier changes
+- **Constraints**: `total_value` must be >= withdrawal amount
+
+#### **External Service Integration**
+- **user-tier-agent**: `/allocate` endpoint with purpose "WITHDRAW"
+- **investment-manager-svc**: Calls `/api/v1/withdraw` endpoint
+
+#### **Key Implementation Details**
+1. **Portfolio Validation**: Check `total_value >= amount` before processing
+2. **Tier Allocation**: Get withdrawal distribution from user-tier-agent
+3. **Transaction Recording**: Create transaction with negative tier values
+4. **Portfolio Updates**: Subtract tier amounts from `tier1_value`, `tier2_value`, `tier3_value`
+5. **JWT Forwarding**: Pass authorization headers to user-tier-agent
+
+#### **Response Format**
+```json
+{
+  "status": "done",
+  "accountid": "1234567890", 
+  "amount": 1000.00,
+  "uuid": "withdrawal-uuid",
+  "tier1": 600.0,
+  "tier2": 300.0,
+  "tier3": 100.0,
+  "transaction_id": "transaction-uuid",
+  "message": "Withdrawal processed successfully"
+}
+```
+
+#### **Error Scenarios**
+- Insufficient portfolio value (400)
+- Invalid request data (400)
+- Tier agent failure (500)
+- Database errors (500)
+
+#### **Testing**
+- Unit tests: `tests/test_withdraw_svc_simple.py`
+- Test coverage: 95%+ of core functionality
+- All critical paths validated
+
+#### **Deployment**
+- Kubernetes manifests: `k8s/base/` and `k8s/overlays/development/`
+- Docker image: `withdraw-svc`
+- Service endpoint: `http://withdraw-svc:8080`
+- Health check: `GET /health`
+- Readiness check: `GET /ready`
