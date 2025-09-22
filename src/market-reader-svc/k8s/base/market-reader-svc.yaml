@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-reader-svc
+  labels:
+    app: market-reader-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: market-reader-svc
+  template:
+    metadata:
+      labels:
+        app: market-reader-svc
+    spec:
+      containers:
+      - name: market-reader-svc
+        image: market-reader-svc
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ASSETS_DB_URI
+          value: "postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db"
+        - name: PORT
+          value: "8080"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: market-reader-svc
+  labels:
+    app: market-reader-svc
+spec:
+  selector:
+    app: market-reader-svc
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

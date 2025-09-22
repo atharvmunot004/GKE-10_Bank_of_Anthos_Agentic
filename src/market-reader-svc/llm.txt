@@ -1,0 +1,218 @@
+microservice-description:
+{
+    request: {
+        type: (CRYPTO, ETF, MUTUAL-FUND, EUITY)
+    }
+    task1: "simulate market data for cryptos, etfs, mutual-funds, and equity based on the type in the request for the differnt assets under that critera mentioned in assets-db, also update assets-db with this new data and return data about these securities and a few more in a format suitable for an AI-agent to ingest and manage a portfolio",
+    return: {
+        differnt analytics about useful to a llm agent
+    }
+}
+
+# Market Reader Service (market-reader-svc) - AI Agent Documentation
+
+## Service Overview
+The Market Reader Service provides real-time market data simulation and comprehensive analytics for investment assets in the Bank of Anthos portfolio management system. This service is specifically designed to support AI agents in making informed portfolio management decisions.
+
+## Core Functionality
+
+### Primary Task
+Simulate market data for different asset types (CRYPTO, ETF, MUTUAL-FUND, EQUITY) based on assets stored in assets-db, update the database with new market prices, and return comprehensive analytics formatted for AI agent consumption and portfolio management.
+
+### Asset Type Support
+- **CRYPTO** (Tier 1): Cryptocurrencies with high volatility simulation (5% daily volatility)
+- **ETF** (Tier 2): Exchange-Traded Funds with moderate volatility (2% daily volatility)  
+- **MUTUAL-FUND** (Tier 2): Mutual Funds with low volatility (1.5% daily volatility)
+- **EQUITY** (Tier 2): Individual Stocks with moderate volatility (3% daily volatility)
+
+## API Endpoints
+
+### Health & Readiness
+- `GET /health` - Service health check
+- `GET /ready` - Service readiness check (includes database connectivity)
+
+### Market Data Operations
+- `POST /api/v1/market-data` - Get market data for specific asset type
+- `GET /api/v1/market-summary` - Get overall market summary across all asset types
+
+## Request Format
+
+### Market Data Request
+```json
+{
+  "type": "CRYPTO"  // Required: CRYPTO, ETF, MUTUAL-FUND, or EQUITY
+}
+```
+
+## Response Format
+
+### Market Data Response
+```json
+{
+  "status": "success",
+  "asset_type": "CRYPTO",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "assets": [
+    {
+      "asset_id": 1,
+      "asset_name": "BTC",
+      "tier_number": 1,
+      "amount": 1000.0,
+      "price_per_unit": 50000.0,
+      "market_value": 50000000.0,
+      "price_change_percent": 2.5,
+      "last_updated": "2024-01-01T10:00:00Z"
+    }
+  ],
+  "analytics": {
+    "market_type": "CRYPTO",
+    "timestamp": "2024-01-01T10:00:00Z",
+    "total_assets": 2,
+    "price_summary": {
+      "min_price": 3000.0,
+      "max_price": 50000.0,
+      "avg_price": 26500.0,
+      "total_market_value": 65000000.0
+    },
+    "volatility_analysis": {
+      "high_volatility_assets": [...],
+      "stable_assets": [...],
+      "recommended_for_short_term": [...],
+      "recommended_for_long_term": [...]
+    },
+    "portfolio_recommendations": {
+      "diversification_score": 0.8,
+      "risk_level": "high",
+      "suggested_allocation": {
+        "BTC": "5-15%",
+        "ETH": "5-15%"
+      }
+    }
+  }
+}
+```
+
+## Database Integration
+
+### Assets Database (assets-db)
+- **Reads**: Asset information by tier number
+- **Updates**: Price per unit and last_updated timestamp
+- **Connection**: `postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db`
+
+### Database Operations
+```sql
+-- Get assets by tier
+SELECT asset_id, tier_number, asset_name, amount, price_per_unit, last_updated
+FROM assets WHERE tier_number = %s
+
+-- Update asset price
+UPDATE assets 
+SET price_per_unit = %s, last_updated = CURRENT_TIMESTAMP
+WHERE asset_id = %s
+```
+
+## Market Simulation Engine
+
+### Price Simulation Models
+- **Cryptocurrency**: 5% daily volatility, realistic price movements
+- **ETFs**: 2% daily volatility, moderate price changes
+- **Mutual Funds**: 1.5% daily volatility, conservative movements
+- **Equities**: 3% daily volatility, market-responsive changes
+
+### Real Market Data Integration
+- Attempts to fetch real market data using yfinance library
+- Falls back to simulation if real data unavailable
+- Supports symbols like SPY, QQQ, VTSAX, individual stocks
+
+## AI Agent Analytics
+
+### Portfolio Recommendations
+- **Diversification Score**: 0.0-1.0 based on number of assets
+- **Risk Level**: Calculated from asset types and volatility patterns
+- **Suggested Allocation**: Percentage recommendations per asset
+
+### Market Analysis Categories
+- **Price Summary**: Min, max, average prices and total market value
+- **Volatility Analysis**: 
+  - High volatility assets (crypto, volatile stocks)
+  - Stable assets (large-cap ETFs, blue-chip stocks)
+  - Short-term recommendations (growth stocks, tech ETFs)
+  - Long-term recommendations (index funds, dividend stocks)
+
+### Investment Guidance
+- **Crypto Assets**: 5-15% allocation, high risk
+- **ETFs**: 15-40% allocation, medium risk
+- **Mutual Funds**: 10-25% allocation, low risk
+- **Equities**: 10-30% allocation, variable risk
+
+## Environment Variables
+- `ASSETS_DB_URI`: PostgreSQL connection string
+- `PORT`: Service port (default: 8080)
+- `REQUEST_TIMEOUT`: HTTP request timeout (default: 30)
+
+## Error Handling
+- **400**: Invalid asset type or malformed request
+- **404**: No assets found for requested type
+- **500**: Database connection or processing errors
+
+## Integration Points
+
+### Dependencies
+- **assets-db**: Primary database for asset information
+- **yfinance**: Optional real market data integration
+- **PostgreSQL**: Database driver (psycopg2)
+
+### Service Communication
+- **Input**: Asset type requests from other services
+- **Output**: Market data and analytics for AI agents
+- **Database**: Real-time price updates to assets-db
+
+## Usage Examples for AI Agents
+
+### 1. Get Crypto Market Data
+```bash
+curl -X POST http://market-reader-svc:8080/api/v1/market-data \
+  -H "Content-Type: application/json" \
+  -d '{"type": "CRYPTO"}'
+```
+
+### 2. Analyze ETF Performance
+```bash
+curl -X POST http://market-reader-svc:8080/api/v1/market-data \
+  -H "Content-Type: application/json" \
+  -d '{"type": "ETF"}'
+```
+
+### 3. Get Overall Market Summary
+```bash
+curl -X GET http://market-reader-svc:8080/api/v1/market-summary
+```
+
+## AI Agent Decision Making Support
+
+### Portfolio Optimization
+- Use `diversification_score` to assess portfolio balance
+- Apply `suggested_allocation` percentages for rebalancing
+- Consider `risk_level` for risk management
+
+### Market Timing
+- Monitor `price_change_percent` for entry/exit signals
+- Use `volatility_analysis` to identify trading opportunities
+- Apply `portfolio_recommendations` for strategic positioning
+
+### Risk Management
+- High volatility assets for aggressive strategies
+- Stable assets for conservative approaches
+- Diversification recommendations for risk reduction
+
+## Performance Characteristics
+- **Response Time**: < 2 seconds for typical requests
+- **Data Freshness**: Real-time price updates
+- **Accuracy**: Simulated data with realistic market behavior
+- **Scalability**: Stateless design supports horizontal scaling
+
+## Monitoring and Health
+- Health endpoint for service monitoring
+- Readiness check includes database connectivity
+- Comprehensive logging for debugging and analysis
+- Error tracking and reporting capabilities
