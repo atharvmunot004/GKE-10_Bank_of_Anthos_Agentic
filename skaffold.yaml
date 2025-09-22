@@ -58,5 +58,8 @@ requires:
 - configs:
   - withdraw-svc
   path: src/withdraw-svc/skaffold.yaml
+- configs:
+  - user-request-queue-svc
+  path: src/user-request-queue-svc/skaffold.yaml
 deploy:
   tolerateFailuresUntilDeadline: true
