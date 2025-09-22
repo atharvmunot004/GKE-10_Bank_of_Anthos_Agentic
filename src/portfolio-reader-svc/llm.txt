@@ -1,3 +1,50 @@
+micro-service-description:
+|-> gets accountid from investment-manager-svc
+|-> queries user-portfolio-db's table of user_portfolios
+|   |-> SELECT (accountid)
+|   |-> response: {
+|         accountid,
+|         tier1_allocation,
+|         tier2_allocation,
+|         tier3_allocation,
+|         tier1_value,
+|         tier2_value,
+|         tier3_value,
+|         .
+|         .
+|         .
+|       } 
+|-> queries user_portfolio-db's table of portfolio-transactions
+|   |-> SELECT(accountid) recent 30 transactions from this table based on timestamp
+|   |-> response: {
+|         [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...],
+|         [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...],
+|         [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...],
+|         .
+|         .
+|         .
+|       }
+|-> returns with JSON containing both the responses from the queries
+|   |-> {
+          portfolio: {
+            accountid,
+            tier1_allocation,
+            tier2_allocation,
+            tier3_allocation,
+            tier1_value,
+            tier2_value,
+            tier3_value,
+          },
+          transactions: {
+            [uuid, tier1_change, tier2_change, tier3_change, status]
+          },
+          status
+        }
+
+--- created by Chinmay and Atharv for agent
+-------------------------------------------
+--- created by agent for agent
+
 # Portfolio Reader Service (portfolio-reader-svc) - AI Agent Documentation
 
 ## Service Overview

@@ -70,6 +70,7 @@ class TestPortfolioReader(unittest.TestCase):
         # Mock transaction data
         transaction_data = {
             'id': '550e8400-e29b-41d4-a716-446655440000',
+            'accountid': '1234567890',
             'transaction_type': 'INVEST',
             'tier1_change': 600.0,
             'tier2_change': 300.0,
@@ -118,6 +119,7 @@ class TestPortfolioReader(unittest.TestCase):
         portfolio_data = {'accountid': '1234567890'}
         transaction_data = {
             'id': '550e8400-e29b-41d4-a716-446655440000',
+            'accountid': '1234567890',
             'transaction_type': 'INVEST',
             'tier1_change': 600.0,
             'tier2_change': 300.0,
@@ -138,7 +140,13 @@ class TestPortfolioReader(unittest.TestCase):
         data = json.loads(response.data)
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]['transaction_type'], 'INVEST')
+        # Updated format: transactions are arrays, not objects
+        # Format: [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...]
+        transaction = data[0]
+        self.assertIsInstance(transaction, list)
+        self.assertEqual(transaction[0], '550e8400-e29b-41d4-a716-446655440000')  # uuid
+        self.assertEqual(transaction[1], '1234567890')  # accountid
+        self.assertEqual(transaction[5], 'COMPLETED')  # status
 
     @patch('portfolio_reader.psycopg2.connect')
     def test_get_portfolio_transactions_with_pagination(self, mock_connect):

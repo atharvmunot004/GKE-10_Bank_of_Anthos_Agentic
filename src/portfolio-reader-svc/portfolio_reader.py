@@ -60,14 +60,14 @@ def get_portfolio(user_id):
             conn.close()
             return jsonify({"error": "Portfolio not found"}), 404
         
-        # Get recent transactions
+        # Get recent transactions (last 30 as per llm.txt)
         cursor.execute("""
             SELECT id, transaction_type, tier1_change, tier2_change, tier3_change,
                    total_amount, fees, status, created_at, updated_at
             FROM portfolio_transactions 
             WHERE accountid = %s 
             ORDER BY created_at DESC 
-            LIMIT 10
+            LIMIT 30
         """, (user_id,))
         
         transactions = cursor.fetchall()
@@ -90,25 +90,28 @@ def get_portfolio(user_id):
             "updated_at": portfolio['updated_at'].isoformat()
         }
         
-        # Convert transactions to serializable format
+        # Convert transactions to format matching llm.txt specification
+        # Format: [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...]
         transaction_list = []
         for tx in transactions:
-            transaction_list.append({
-                "id": str(tx['id']),
-                "transaction_type": tx['transaction_type'],
-                "tier1_change": float(tx['tier1_change']),
-                "tier2_change": float(tx['tier2_change']),
-                "tier3_change": float(tx['tier3_change']),
-                "total_amount": float(tx['total_amount']),
-                "fees": float(tx['fees']),
-                "status": tx['status'],
-                "created_at": tx['created_at'].isoformat(),
-                "updated_at": tx['updated_at'].isoformat()
-            })
+            transaction_list.append([
+                str(tx['id']),  # uuid
+                tx['accountid'],  # accountid
+                float(tx['tier1_change']),  # tier1_change
+                float(tx['tier2_change']),  # tier2_change
+                float(tx['tier3_change']),  # tier3_change
+                tx['status'],  # status
+                tx['transaction_type'],  # transaction_type
+                float(tx['total_amount']),  # total_amount
+                float(tx['fees']),  # fees
+                tx['created_at'].isoformat(),  # created_at
+                tx['updated_at'].isoformat()  # updated_at
+            ])
         
         response_data = {
             "portfolio": portfolio_data,
-            "transactions": transaction_list
+            "transactions": transaction_list,
+            "status": "success"
         }
         
         logger.info(f"Successfully retrieved portfolio for user {user_id}")
@@ -151,21 +154,23 @@ def get_portfolio_transactions(user_id):
         cursor.close()
         conn.close()
         
-        # Convert to serializable format
+        # Convert to format matching llm.txt specification
+        # Format: [uuid, accountid, tier1_change, tier2_change, tier3_change, status, ...]
         transaction_list = []
         for tx in transactions:
-            transaction_list.append({
-                "id": str(tx['id']),
-                "transaction_type": tx['transaction_type'],
-                "tier1_change": float(tx['tier1_change']),
-                "tier2_change": float(tx['tier2_change']),
-                "tier3_change": float(tx['tier3_change']),
-                "total_amount": float(tx['total_amount']),
-                "fees": float(tx['fees']),
-                "status": tx['status'],
-                "created_at": tx['created_at'].isoformat(),
-                "updated_at": tx['updated_at'].isoformat()
-            })
+            transaction_list.append([
+                str(tx['id']),  # uuid
+                tx['accountid'],  # accountid
+                float(tx['tier1_change']),  # tier1_change
+                float(tx['tier2_change']),  # tier2_change
+                float(tx['tier3_change']),  # tier3_change
+                tx['status'],  # status
+                tx['transaction_type'],  # transaction_type
+                float(tx['total_amount']),  # total_amount
+                float(tx['fees']),  # fees
+                tx['created_at'].isoformat(),  # created_at
+                tx['updated_at'].isoformat()  # updated_at
+            ])
         
         logger.info(f"Successfully retrieved {len(transaction_list)} transactions for user {user_id}")
         return jsonify(transaction_list), 200

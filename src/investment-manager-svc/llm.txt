@@ -11,12 +11,19 @@ micro-service-description:
   |           tier1_allocation,
   |           tier2_allocation,
   |           tier3_allocation,
+  |           total_allocation,
   |           tier1_value,
   |           tier2_value,
   |           tier3_value,
+  |           total_value
   |         },
   |         transactions: {
-  |           [uuid, tier1_change, tier2_change, tier3_change, status]
+  |           [uuid, tier1_change, tier2_change, tier3_change, status],
+  |           [uuid, tier1_change, tier2_change, tier3_change, status],
+  |           [uuid, tier1_change, tier2_change, tier3_change, status],
+  |           .
+  |           .
+  |           .
   |         }
   |       }
   |    
