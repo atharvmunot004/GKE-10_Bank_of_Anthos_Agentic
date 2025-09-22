@@ -29,9 +29,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create non-root user
-RUN useradd -m -u 1000 portfolioagent && \
-    chown -R portfolioagent:portfolioagent /app
-USER portfolioagent
+RUN useradd -m -u 1000 bankassetagent && \
+    chown -R bankassetagent:bankassetagent /app
+USER bankassetagent
 
 # Expose port
 EXPOSE 8080

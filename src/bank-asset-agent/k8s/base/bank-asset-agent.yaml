@@ -83,6 +83,13 @@ spec:
               value: "http://execute-order-svc:8080"
             - name: QUEUE_SVC_URL
               value: "http://user-request-queue-svc:8080"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/etc/credentials/credentials.json"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-api-key
+                  key: api-key
           envFrom:
             - configMapRef:
                 name: environment-config
@@ -97,6 +104,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          volumeMounts:
+            - name: credentials
+              mountPath: /etc/credentials
+              readOnly: true
           readinessProbe:
             tcpSocket:
               port: 8080
@@ -108,3 +119,7 @@ spec:
               port: 8080
             failureThreshold: 30
             periodSeconds: 10
+      volumes:
+        - name: credentials
+          secret:
+            secretName: bank-asset-agent-credentials

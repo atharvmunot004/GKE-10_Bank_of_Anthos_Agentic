@@ -16,8 +16,9 @@
 	"execute-order-svc" : [ "bank-asset-agent", "rule-checker-svc" ],
 	"user-request-queue-svc" : [ "bank-asset-agent", "rule-checker-svc", "queue-db" ],
 	"user-portfolio-svc" : [ "user-portfolio-table" ],
-	"invest-svc" : [ "user-portfolio-table", "user-tier-agent", "portfolio-transaction-table" ],
-	"withdraw-svc" : [ "portfolio-transaction-table", "user-portfolio-table", "user-request-queue-svc", "user-return-rules-agent" ],
+	"invest-svc" : [ "user-portfolio-table", "user-tier-agent", "portfolio-transaction-table", "ledger writer" ],
+	"withdraw-svc" : [ "portfolio-transaction-table", "user-portfolio-table", "user-tier-agent", "user-return-rules-agent", "ledger writer" ],
 	"rule-checker-svc" : [ "bank-asset-agent", "execute-order-svc" ],
-	"portfolio-transaction-table" : [ "user-return-rules-agent" ]
+	"portfolio-transaction-table" : [ "user-return-rules-agent" ],
+	"consistency-manager-svc" : [ "queue-db", "portfolio-transaction-table" ],
 ]

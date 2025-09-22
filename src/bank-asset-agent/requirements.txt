@@ -1,9 +1,6 @@
-grpcio
-grpcio-tools
-protobuf
-PyJWT
-cryptography
-google-cloud-bigquery
+flask
 requests
 psycopg2-binary
 sqlalchemy
+google-generativeai
+google-cloud-aiplatform

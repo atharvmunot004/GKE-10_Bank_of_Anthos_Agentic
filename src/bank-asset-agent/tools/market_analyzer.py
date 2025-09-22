@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2024 Google LLC
-# Bank Asset Agent - Market Analyzer
+# Bank Asset Agent - Market Analyzer with Gemini AI Integration
 
 import requests
 import os
@@ -11,10 +11,11 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 class MarketAnalyzer:
-    """AI agent for market data analysis and trend prediction"""
+    """AI agent for market data analysis and trend prediction with Gemini AI integration"""
     
-    def __init__(self, market_reader_url: str = None):
+    def __init__(self, market_reader_url: str = None, ai_analyzer=None):
         self.market_reader_url = market_reader_url or os.environ.get('MARKET_READER_URL', 'http://market-reader-svc:8080')
+        self.ai_analyzer = ai_analyzer  # AI-powered analyzer for enhanced analysis
     
     def get_market_data(self, symbols: List[str], time_range: str = "1d") -> Dict:
         """Retrieve real-time market data for given symbols"""
@@ -31,8 +32,34 @@ class MarketAnalyzer:
             raise Exception(f"Market data retrieval failed: {e}")
     
     def analyze_trends(self, market_data: Dict) -> Dict:
-        """Analyze market trends and patterns"""
+        """Analyze market trends and patterns with optional AI enhancement"""
         try:
+            # Use AI analyzer if available
+            if self.ai_analyzer:
+                logger.info("Using AI-powered trend analysis")
+                ai_analysis = self.ai_analyzer.analyze_market_trends(market_data)
+                
+                # Convert AI analysis to expected format
+                trends = {}
+                for symbol, data in market_data.get('prices', {}).items():
+                    trends[symbol] = {
+                        'trend': ai_analysis.get('trend_analysis', 'neutral'),
+                        'confidence': ai_analysis.get('confidence_score', 0.5) / 100,
+                        'price': data.get('price', 0),
+                        'change': data.get('change', 0),
+                        'change_percent': data.get('change_percent', 0),
+                        'ai_reasoning': ai_analysis.get('reasoning', ''),
+                        'ai_key_factors': ai_analysis.get('key_factors', [])
+                    }
+                
+                return {
+                    'trends': trends,
+                    'overall_sentiment': ai_analysis.get('trend_analysis', 'neutral'),
+                    'ai_analysis': ai_analysis,
+                    'analysis_timestamp': datetime.utcnow().isoformat()
+                }
+            
+            # Fallback to traditional analysis
             trends = {}
             for symbol, data in market_data.get('prices', {}).items():
                 price = data.get('price', 0)

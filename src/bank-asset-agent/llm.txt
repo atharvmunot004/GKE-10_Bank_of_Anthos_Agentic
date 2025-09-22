@@ -1,15 +1,25 @@
 # Bank Asset Agent - LLM Documentation
 
 ## Overview
-The `bank-asset-agent` is an AI-powered service that manages investment assets, analyzes market data, and executes investment decisions for the Bank of Anthos application. It serves as the central intelligence for asset management operations.
+The `bank-asset-agent` is an advanced AI-powered service that manages investment assets, analyzes market data, and executes investment decisions for the Bank of Anthos application. It integrates Google's Gemini AI for sophisticated market analysis, portfolio optimization, and investment decision-making. The service serves as the central intelligence for asset management operations with both traditional rule-based logic and cutting-edge AI capabilities.
 
 ## Service Architecture
 - **Service Name**: `bank-asset-agent`
 - **Port**: `8080`
-- **Protocol**: gRPC
+- **Protocol**: HTTP REST + AI Integration
 - **Authentication**: JWT tokens required
 - **Team**: Assets
 - **Tier**: Backend
+- **AI Integration**: Google Gemini AI for intelligent decision-making
+
+## Architectural Flow
+The `bank-asset-agent` is **called by** `user-request-queue-svc` to process investment requests:
+
+```
+user-request-queue-svc → bank-asset-agent → [market-reader-svc, rule-checker-svc] → execute-order-svc
+```
+
+**Note**: The `bank-asset-agent` does NOT process queues directly. It receives investment requests from `user-request-queue-svc` and makes AI-powered decisions about asset management.
 
 ## Service Dependencies
 
@@ -59,6 +69,12 @@ The `bank-asset-agent` is an AI-powered service that manages investment assets, 
 
 ### Database Configuration
 - `ASSETS_DB_URI`: Database connection URI for assets-db
+
+### AI Configuration
+- `GEMINI_API_KEY`: Google Gemini AI API key for advanced analysis
+- `AI_ENABLED`: Enable AI-powered features (default: "true")
+- `AI_CONFIDENCE_THRESHOLD`: Minimum confidence threshold for AI decisions (default: "0.7")
+- `AI_FALLBACK_ENABLED`: Enable fallback to rule-based logic when AI fails (default: "true")
 
 ## API Endpoints
 
@@ -286,27 +302,42 @@ src/bank-asset-agent/
 └── llm.txt                  # This documentation
 ```
 
-## Agent Tools
+## AI-Powered Agent Tools
 
-### 1. Market Data Tools
-- `get_market_data`: Retrieve real-time market data
-- `analyze_trends`: Analyze market trends and patterns
-- `predict_prices`: Predict asset price movements
+### 1. AI Market Analysis Tools (`tools/ai_market_analyzer.py`)
+- **Gemini AI Integration**: Advanced market analysis using Google's Gemini AI
+- `analyze_market_trends()`: AI-powered trend analysis with confidence scoring and reasoning
+- `predict_asset_prices()`: ML-based price prediction with market context
+- `analyze_portfolio_risk()`: AI risk assessment with stress testing scenarios
+- `optimize_portfolio_allocation()`: AI portfolio optimization recommendations
+- `generate_investment_recommendations()`: Personalized AI investment advice
+- `analyze_market_sentiment()`: News and social media sentiment analysis
 
-### 2. Rule Validation Tools
-- `check_investment_rules`: Validate investment rules
-- `assess_risk`: Assess investment risk
-- `validate_compliance`: Check compliance requirements
+### 2. Enhanced Market Data Tools (`tools/market_analyzer.py`)
+- **Hybrid Approach**: AI-enhanced analysis with traditional fallback
+- `get_market_data()`: Retrieve real-time market data from external sources
+- `analyze_trends()`: AI-enhanced trend analysis with traditional backup
+- `predict_prices()`: AI-powered price prediction with confidence metrics
+- `get_market_summary()`: Comprehensive market summary with AI insights
 
-### 3. Order Execution Tools
-- `execute_buy_order`: Execute buy orders
-- `execute_sell_order`: Execute sell orders
-- `monitor_order_status`: Monitor order execution
+### 3. AI Decision Making Tools (`tools/ai_decision_maker.py`)
+- **Intelligent Decision Engine**: AI-powered investment decision making
+- `make_investment_decision()`: AI investment approval/rejection with detailed reasoning
+- `assess_investment_risk()`: AI risk analysis with mitigation strategies
+- `validate_compliance()`: AI-powered compliance checking and reporting
+- `generate_alternative_strategies()`: AI alternative investment suggestions
 
-### 4. Asset Management Tools
-- `update_asset_data`: Update asset information
-- `get_asset_availability`: Check asset availability
-- `calculate_portfolio_value`: Calculate portfolio values
+### 4. AI Portfolio Management Tools (`tools/ai_portfolio_manager.py`)
+- **Dynamic Portfolio Optimization**: AI-driven portfolio management
+- `optimize_portfolio()`: AI portfolio rebalancing recommendations
+- `analyze_diversification()`: AI diversification analysis and scoring
+- `generate_rebalancing_plan()`: AI rebalancing strategy with timing
+- `assess_performance()`: AI performance analysis and recommendations
+
+### 5. Traditional Asset Management Tools (Legacy)
+- `update_asset_data()`: Update asset information in database
+- `get_asset_availability()`: Check asset availability and stock levels
+- `calculate_portfolio_value()`: Calculate portfolio values and metrics
 
 ## Error Handling
 

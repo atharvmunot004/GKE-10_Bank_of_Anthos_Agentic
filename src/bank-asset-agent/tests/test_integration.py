@@ -61,47 +61,36 @@ class TestBankAssetAgentIntegration(unittest.TestCase):
         updated = client.update_asset_price(1, 155.50)
         self.assertTrue(updated)
     
-    @patch.dict(os.environ, {'QUEUE_DB_URI': 'postgresql://test:test@localhost:5432/test'})
+    @patch.dict(os.environ, {'ASSETS_DB_URI': 'postgresql://test:test@localhost:5432/test'})
     @patch('psycopg2.connect')
-    def test_queue_database_integration(self, mock_connect):
-        """Test queue database integration"""
+    def test_assets_database_integration(self, mock_connect):
+        """Test assets database integration"""
         # Mock database connection
         mock_cursor = Mock()
         mock_cursor.fetchall.return_value = [
-            (1, "user123", 1000.0, 500.0, 200.0, "uuid-123", "pending", "2024-09-22T10:30:00Z"),
-            (2, "user456", -200.0, 0.0, 0.0, "uuid-456", "pending", "2024-09-22T10:35:00Z")
+            ("asset1", 1, "Gold", 100.0, 2000.0, "2024-09-22T10:30:00Z"),
+            ("asset2", 2, "Silver", 50.0, 25.0, "2024-09-22T10:35:00Z"),
+            ("asset3", 1, "Bitcoin", 0.5, 50000.0, "2024-09-22T10:40:00Z")
         ]
         mock_conn = Mock()
         mock_conn.cursor.return_value = mock_cursor
         mock_connect.return_value = mock_conn
         
-        from utils.db_client import QueueDatabaseClient
-        client = QueueDatabaseClient()
+        from utils.db_client import AssetsDatabaseClient
+        client = AssetsDatabaseClient("postgresql://test:test@localhost:5432/test")
         
-        # Test getting pending requests
-        requests = client.get_pending_requests()
+        # Test getting assets by tier
+        assets = client.get_assets_by_tier(1)
         
-        self.assertEqual(len(requests), 2)
-        self.assertEqual(requests[0]['account_number'], "user123")
-        self.assertEqual(requests[0]['tier_1'], 1000.0)
-        self.assertEqual(requests[1]['tier_1'], -200.0)  # Withdrawal
+        self.assertEqual(len(assets), 3)
+        self.assertEqual(assets[0]['asset_name'], "Gold")
+        self.assertEqual(assets[0]['tier_number'], 1)
+        self.assertEqual(assets[1]['tier_number'], 2)
+        self.assertEqual(assets[2]['tier_number'], 1)
         
-        # Test adding queue entry
-        mock_cursor.fetchone.return_value = (3,)
-        mock_cursor.rowcount = 1
-        queue_id = client.add_queue_entry({
-            'account_number': 'user789',
-            'tier_1': 300.0,
-            'tier_2': 0.0,
-            'tier_3': 0.0,
-            'uuid': 'uuid-789'
-        })
-        
-        self.assertEqual(queue_id, 3)
-        
-        # Test updating request status
-        updated = client.update_request_status(1, "processed")
-        self.assertTrue(updated)
+        # Test getting all assets
+        all_assets = client.get_all_assets()
+        self.assertEqual(len(all_assets), 3)
     
     @patch('utils.http_client.MarketReaderClient.get_market_data')
     @patch('utils.http_client.RuleCheckerClient.validate_investment')

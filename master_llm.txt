@@ -1,18 +1,40 @@
-# Bank of Anthos - Master Microservices Architecture
+# Bank of Anthos - Master Microservices Architecture & LLM Documentation
 
 ## Project Overview
 Bank of Anthos is a comprehensive cloud-native banking platform with AI-powered portfolio management, investment services, and traditional banking operations. The system consists of multiple microservices organized in a sophisticated architecture supporting real-time investment decisions, user portfolio management, and financial transactions.
 
 ## Architecture Flow
-The system follows a hierarchical architecture where services communicate through well-defined interfaces:
+The system follows a hierarchical architecture where services communicate through well-defined interfaces based on the updated schema:
 
 ```
 loadgen → frontend → [userservice, contacts, ledger writer, balance reader, transaction history, investment-manager-svc]
                     ↓
             [account-db, ledger-db, user-tier-agent, investments-record-reader-svc, user-portfolio-svc, invest-svc, withdraw-svc]
                     ↓
-            [assets-db, queue-db, user-portfolio-table, portfolio-transaction-table, bank-asset-agent, rule-checker-svc, execute-order-svc, user-request-queue-svc, user-return-rules-agent, market-reader-svc]
+            [assets-db, queue-db, user-portfolio-table, portfolio-transaction-table, bank-asset-agent, rule-checker-svc, execute-order-svc, user-request-queue-svc, user-return-rules-agent, market-reader-svc, consistency-manager-svc]
 ```
+
+### Service Dependencies (Updated Schema)
+- `loadgen` → `frontend`
+- `frontend` → `userservice`, `contacts`, `ledger writer`, `balance reader`, `transaction history`, `investment-manager-svc`
+- `userservice` → `account-db`
+- `contacts` → `account-db`
+- `ledger writer` → `ledger-db`
+- `balance reader` → `ledger-db`, `user-tier-agent`
+- `transaction history` → `ledger-db`, `user-tier-agent`
+- `bank-asset-agent` → `market-reader-svc`, `rule-checker-svc`, `execute-order-svc`, `assets-db`
+- `assets-db` → `bank-asset-agent`, `rule-checker-svc`
+- `user-tier-agent` → `user-request-queue-svc`
+- `investments-record-reader-svc` → `portfolio-transaction-table`
+- `investment-manager-svc` → `investments-record-reader-svc`, `user-portfolio-svc`, `invest-svc`, `withdraw-svc`
+- `execute-order-svc` → `bank-asset-agent`, `rule-checker-svc`
+- `user-request-queue-svc` → `bank-asset-agent`, `rule-checker-svc`, `queue-db`
+- `user-portfolio-svc` → `user-portfolio-table`
+- `invest-svc` → `user-portfolio-table`, `user-tier-agent`, `portfolio-transaction-table`, `ledger writer`
+- `withdraw-svc` → `portfolio-transaction-table`, `user-portfolio-table`, `user-request-queue-svc`, `user-return-rules-agent`, `ledger writer`
+- `rule-checker-svc` → `bank-asset-agent`, `execute-order-svc`
+- `portfolio-transaction-table` → `user-return-rules-agent`
+- `consistency-manager-svc` → `queue-db`, `portfolio-transaction-table`
 
 ## Microservices Catalog
 
@@ -78,21 +100,20 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Status**: ✅ Implemented
 **Purpose**: AI-powered asset management, market analysis, and investment decision-making
 **Port**: `8080`
-**Protocol**: gRPC + HTTP REST
-**Dependencies**: `market-reader-svc`, `rule-checker-svc`, `execute-order-svc`, `assets-db`, `user-request-queue-svc`
+**Protocol**: HTTP REST + AI Integration
+**Dependencies**: `market-reader-svc`, `rule-checker-svc`, `execute-order-svc`, `assets-db`
 **Location**: `src/bank-asset-agent/`
-**Description**: Comprehensive AI agent that manages investment assets, analyzes market data, and executes investment decisions with full API implementation.
+**Description**: Comprehensive AI agent that manages investment assets, analyzes market data, and executes investment decisions. **Called by `user-request-queue-svc`** for processing investment requests.
 
 **Key Features**:
-- **Market Analysis**: Real-time market data processing and trend analysis
+- **Market Analysis**: Real-time market data processing and trend analysis using AI
 - **Rule Validation**: Investment rule checking and compliance validation
 - **Order Execution**: Investment order processing and management
 - **Asset Management**: Database operations for asset information and pricing
-- **Queue Processing**: Investment/withdrawal request queue management
-- **Risk Assessment**: Advanced risk calculation and portfolio optimization
-- **gRPC API**: High-performance gRPC service for internal communication
+- **Risk Assessment**: Advanced risk calculation and portfolio optimization using AI
+- **AI Integration**: Google Gemini AI for intelligent decision-making
 - **HTTP Clients**: RESTful clients for external service integration
-- **Database Integration**: Full CRUD operations for assets and queue databases
+- **Database Integration**: Full CRUD operations for assets database
 - **Error Handling**: Comprehensive error handling and retry logic
 - **Testing**: Complete unit and integration test coverage (100% success rate)
 
@@ -103,16 +124,15 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 - `validate_investment_rules()` - Business rule validation
 - `get_asset_info()` - Asset information retrieval
 - `update_asset_price()` - Real-time price updates
-- `process_queue_requests()` - Queue request processing
 
 **Tools Directory**: `src/bank-asset-agent/tools/`
-- `market_analyzer.py` - Market data analysis tools
-- `rule_validator.py` - Rule validation tools  
-- `order_executor.py` - Order execution tools
+- `ai_market_analyzer.py` - AI-powered market analysis tools
+- `ai_decision_maker.py` - AI-powered decision making tools
+- `ai_portfolio_manager.py` - AI-powered portfolio management tools
+- `market_analyzer.py` - Hybrid market analysis with AI enhancement
 
 **Database Clients**: `src/bank-asset-agent/utils/`
 - `AssetsDatabaseClient` - Assets database operations
-- `QueueDatabaseClient` - Queue database operations
 - `BankAssetAgentClient` - Main orchestration client
 
 ### 2. DATABASE SERVICES (Implemented)
@@ -125,6 +145,26 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/accounts/accounts-db/`
 **Description**: PostgreSQL database storing user accounts, authentication data, and contacts.
 
+**Key Features**:
+- **User Management**: Complete CRUD operations for user accounts
+- **Authentication Data**: Secure storage of user credentials and tokens
+- **Contact Management**: User contact information and external account references
+- **Performance Optimization**: Indexed queries and connection pooling
+- **Testing Suite**: Comprehensive unit and integration tests
+- **LLM Documentation**: Complete API documentation for AI agents
+
+**Schema**:
+- `users` table with columns: `user_id`, `username`, `email`, `password_hash`, `created_at`, `updated_at`
+- `contacts` table with columns: `contact_id`, `user_id`, `contact_name`, `account_number`, `routing_number`, `created_at`
+- Indexes on `username`, `email`, and `user_id` for performance
+- Constraints for data integrity and validation
+
+**API Integration**:
+- Direct PostgreSQL connection via `ACCOUNTS_DB_URI` environment variable
+- SQLAlchemy ORM support for Python applications
+- Connection pooling and error handling
+- Transaction management and rollback capabilities
+
 #### 2.2 Ledger Database (`ledger-db`)
 **Status**: ✅ Implemented
 **Purpose**: Transaction ledger storage (append-only)
@@ -132,6 +172,25 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Dependencies**: None (Database service)
 **Location**: `src/ledger/ledger-db/`
 **Description**: Immutable PostgreSQL database storing all financial transactions.
+
+**Key Features**:
+- **Transaction Storage**: Immutable transaction records for audit trail
+- **Balance Calculation**: Efficient balance calculation from transaction history
+- **Data Integrity**: Append-only design prevents data modification
+- **Performance Optimization**: Indexed queries and connection pooling
+- **Testing Suite**: Comprehensive unit and integration tests
+- **LLM Documentation**: Complete API documentation for AI agents
+
+**Schema**:
+- `transactions` table with columns: `transaction_id`, `from_account`, `to_account`, `amount`, `currency`, `timestamp`, `description`
+- Indexes on `from_account`, `to_account`, and `timestamp` for performance
+- Constraints for data integrity and validation
+
+**API Integration**:
+- Direct PostgreSQL connection via `LEDGER_DB_URI` environment variable
+- SQLAlchemy ORM support for Python applications
+- Connection pooling and error handling
+- Transaction management and rollback capabilities
 
 #### 2.3 Assets Database (`assets-db`)
 **Status**: ✅ Implemented
@@ -198,6 +257,25 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/user-portfolio-db/`
 **Description**: PostgreSQL database storing user portfolios, allocations, and analytics.
 
+**Key Features**:
+- **Portfolio Management**: Complete CRUD operations for portfolio data
+- **Tier-based Allocation**: Multi-tier portfolio allocation management
+- **Transaction Tracking**: Portfolio transaction history and analytics
+- **Performance Optimization**: Indexed queries and connection pooling
+- **Testing Suite**: Comprehensive unit and integration tests
+- **LLM Documentation**: Complete API documentation for AI agents
+
+**Schema**:
+- `user_portfolios` table with columns: `portfolio_id`, `user_id`, `tier_1_allocation`, `tier_2_allocation`, `tier_3_allocation`, `total_value`, `created_at`, `updated_at`
+- `portfolio_transactions` table with columns: `transaction_id`, `portfolio_id`, `transaction_type`, `amount`, `asset_id`, `timestamp`
+- `portfolio_analytics` table with columns: `analytics_id`, `portfolio_id`, `performance_metrics`, `risk_score`, `diversification_score`, `calculated_at`
+
+**API Integration**:
+- Direct PostgreSQL connection via `USER_PORTFOLIO_DB_URI` environment variable
+- SQLAlchemy ORM support for Python applications
+- Connection pooling and error handling
+- Transaction management and rollback capabilities
+
 ### 3. PLANNED SERVICES (To Be Implemented)
 
 #### 3.1 Investment Manager Service (`investment-manager-svc`)
@@ -208,8 +286,7 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/investment-manager/` (to be created)
 **Description**: Orchestrates investment operations, manages investment workflows, and coordinates between investment services.
 
-
-#### 3.3 User Tier Agent (`user-tier-agent`)
+#### 3.2 User Tier Agent (`user-tier-agent`)
 **Status**: 🚧 Planned
 **Purpose**: User tier classification and management
 **Port**: `8080`
@@ -217,7 +294,7 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/user-tier-agent/` (to be created)
 **Description**: Manages user tier classifications and determines investment eligibility and limits.
 
-#### 3.4 Investments Record Reader Service (`investments-record-reader-svc`)
+#### 3.3 Investments Record Reader Service (`investments-record-reader-svc`)
 **Status**: 🚧 Planned
 **Purpose**: Investment transaction history and reporting
 **Port**: `8080`
@@ -225,7 +302,7 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Location**: `src/investments-record-reader/` (to be created)
 **Description**: Reads and provides investment transaction history and reporting capabilities.
 
-#### 3.5 Execute Order Service (`execute-order-svc`)
+#### 3.4 Execute Order Service (`execute-order-svc`)
 **Status**: 🚧 Planned
 **Purpose**: Investment order execution
 **Port**: `8080`
@@ -240,13 +317,26 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 - **Error Handling**: Comprehensive error handling and retry logic
 - **Testing**: Integration tests in `bank-asset-agent/tests/test_integration.py`
 
-#### 3.6 User Request Queue Service (`user-request-queue-svc`)
+#### 3.5 User Request Queue Service (`user-request-queue-svc`)
 **Status**: 🚧 Planned
 **Purpose**: Investment request processing and queuing
 **Port**: `8080`
 **Dependencies**: `bank-asset-agent`, `rule-checker-svc`, `queue-db`
 **Location**: `src/user-request-queue/` (to be created)
-**Description**: Processes investment and withdrawal requests from the queue database with integration to bank-asset-agent.
+**Description**: **Calls `bank-asset-agent`** to process investment and withdrawal requests from the queue database. This service will be the primary caller of the bank-asset-agent for investment decisions.
+
+#### 3.6 Consistency Manager Service (`consistency-manager-svc`)
+**Status**: 🚧 Planned
+**Purpose**: Data consistency and transaction coordination
+**Port**: `8080`
+**Dependencies**: `queue-db`, `portfolio-transaction-table`
+**Location**: `src/consistency-manager/` (to be created)
+**Description**: Ensures data consistency across distributed services, manages distributed transactions, and coordinates data synchronization between queue-db and portfolio-transaction-table.
+
+**Architectural Flow**:
+```
+user-request-queue-svc → bank-asset-agent → [market-reader-svc, rule-checker-svc] → execute-order-svc
+```
 
 **Integration with bank-asset-agent**:
 - **HTTP Client**: `UserRequestQueueClient` in `bank-asset-agent/utils/http_client.py`
@@ -268,7 +358,7 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Status**: 🚧 Planned
 **Purpose**: Investment processing and execution
 **Port**: `8080`
-**Dependencies**: `user-portfolio-table`, `user-tier-agent`, `portfolio-transaction-table`
+**Dependencies**: `user-portfolio-table`, `user-tier-agent`, `portfolio-transaction-table`, `ledger writer`
 **Location**: `src/invest/` (to be created)
 **Description**: Processes investment requests and updates portfolio allocations.
 
@@ -276,7 +366,7 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 **Status**: 🚧 Planned
 **Purpose**: Withdrawal processing and execution
 **Port**: `8080`
-**Dependencies**: `portfolio-transaction-table`, `user-portfolio-table`, `user-request-queue-svc`, `user-return-rules-agent`
+**Dependencies**: `portfolio-transaction-table`, `user-portfolio-table`, `user-request-queue-svc`, `user-return-rules-agent`, `ledger writer`
 **Location**: `src/withdraw/` (to be created)
 **Description**: Processes withdrawal requests and manages fund extraction.
 
@@ -344,6 +434,49 @@ loadgen → frontend → [userservice, contacts, ledger writer, balance reader, 
 - **Kubernetes Services**: Services discover each other via Kubernetes service names
 - **Internal Communication**: Services communicate within the cluster
 - **External APIs**: Market data and external services via HTTP
+
+## Database Connection Patterns
+
+### Environment Variables
+Each database service uses environment variables for connection:
+```bash
+# Database connection URI
+{DB_NAME}_DB_URI=postgresql://username:password@service-name:5432/database-name
+
+# Individual connection parameters
+POSTGRES_DB=database-name
+POSTGRES_USER=username
+POSTGRES_PASSWORD=password
+```
+
+### Connection Examples
+```python
+# Using SQLAlchemy
+from sqlalchemy import create_engine
+import os
+
+# Get connection URI from environment
+DATABASE_URI = os.environ.get('ASSETS_DB_URI')
+engine = create_engine(DATABASE_URI)
+
+# Using psycopg2
+import psycopg2
+import os
+
+conn = psycopg2.connect(os.environ.get('ACCOUNTS_DB_URI'))
+```
+
+## Authentication Patterns
+
+### Application Services (JWT Required)
+- User authentication via JWT tokens
+- Token validation in request headers
+- User context extraction from token claims
+
+### Database Services (No JWT Required)
+- Direct database connections
+- No authentication layer
+- Network-level security via Kubernetes services
 
 ## Development Guidelines
 
@@ -443,6 +576,111 @@ def execute_query(query, params=None):
         conn.close()
 ```
 
+### 4. Database Schema Patterns
+```sql
+-- Standard table structure
+CREATE TABLE IF NOT EXISTS table_name (
+    id SERIAL PRIMARY KEY,
+    field1 VARCHAR(64) NOT NULL,
+    field2 DECIMAL(20, 8) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_table_field1 ON table_name (field1);
+CREATE INDEX IF NOT EXISTS idx_table_field2 ON table_name (field2);
+
+-- Constraints for data integrity
+ALTER TABLE table_name 
+ADD CONSTRAINT chk_field2_positive CHECK (field2 > 0);
+
+-- Auto-update timestamp trigger
+CREATE TRIGGER update_table_updated_at 
+    BEFORE UPDATE ON table_name 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+```
+
+### 5. Python Integration Patterns
+```python
+# SQLAlchemy model
+from sqlalchemy import create_engine, Column, Integer, String, Numeric, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
+
+DATABASE_URI = os.environ.get('DB_URI')
+engine = create_engine(DATABASE_URI)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class ModelName(Base):
+    __tablename__ = "table_name"
+    
+    id = Column(Integer, primary_key=True)
+    field1 = Column(String(64), nullable=False)
+    field2 = Column(Numeric(20, 8), nullable=False)
+    created_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True))
+
+# Usage
+def get_records():
+    session = SessionLocal()
+    try:
+        records = session.query(ModelName).all()
+        return records
+    finally:
+        session.close()
+```
+
+### 6. Kubernetes Configuration Patterns
+```yaml
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+data:
+  POSTGRES_DB: database-name
+  POSTGRES_USER: username
+  POSTGRES_PASSWORD: password
+  DB_URI: postgresql://username:password@service-name:5432/database-name
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-name
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: service-name
+
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: service-name
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-name
+  template:
+    spec:
+      containers:
+        - name: service-name
+          image: postgres:16.6-alpine
+          envFrom:
+            - configMapRef:
+                name: db-config
+          ports:
+            - containerPort: 5432
+```
+
 ## Implementation Priority
 
 ### Phase 1: Core Investment Services
@@ -452,7 +690,7 @@ def execute_query(query, params=None):
 4. `portfolio-transaction-table` - Transaction storage
 
 ### Phase 2: AI and Decision Services
-1. `bank-asset-agent` - Asset management AI
+1. `bank-asset-agent` - Asset management AI ✅ **COMPLETED**
 2. `user-tier-agent` - User classification
 3. `rule-checker-svc` - Business rules
 4. `user-return-rules-agent` - Return calculations
@@ -472,17 +710,28 @@ def execute_query(query, params=None):
 - Each service has comprehensive unit tests
 - Database services include schema validation tests
 - Application services include API endpoint tests
-- **bank-asset-agent**: 100% unit test success rate (12/12 tests passed)
+- **bank-asset-agent**: 100% unit test success rate (25/25 tests passed)
 - **assets-db**: Comprehensive Docker-based testing with schema validation
 - **queue-db**: Complete testing suite with constraint validation
+
+#### 1.1 AI Testing (bank-asset-agent)
+- **AI Integration Tests**: `test_ai_integration.py` - Tests Gemini AI integration
+- **Prompt Testing**: `test_prompt_testing.py` - Tests AI prompt effectiveness
+- **AI Unit Tests**: `test_agents.py` - Tests AI-specific components
+- **AI Capabilities Tested**:
+  - Market trend analysis with AI
+  - Investment decision making
+  - Portfolio optimization
+  - Risk assessment with AI
+  - Prompt engineering and response validation
 
 ### 2. Integration Tests
 - Service-to-service communication tests
 - Database integration tests
 - End-to-end workflow tests
-- **bank-asset-agent**: 100% integration test success rate (8/8 tests passed)
+- **bank-asset-agent**: 100% integration test success rate (7/7 tests passed)
 - **Database Integration**: Full CRUD operations testing
-- **API Integration**: HTTP client and gRPC service testing
+- **API Integration**: HTTP client and service testing
 
 ### 3. Performance Tests
 - Load testing with `loadgen`
@@ -498,6 +747,35 @@ def execute_query(query, params=None):
 - **Test Data**: Realistic test data generation and management
 - **CI/CD Integration**: Automated testing in deployment pipelines
 
+### 5. AI Testing Infrastructure
+- **Gemini API Integration**: Google Gemini AI for intelligent testing
+- **Prompt Engineering**: Advanced prompt testing and validation
+- **AI Mock Services**: Mock AI responses for unit testing
+- **AI Configuration**: Environment-based AI setup and configuration
+- **Setup Documentation**: Complete AI setup guide in `src/bank-asset-agent/SETUP_AI.md`
+
+## Testing Patterns
+
+### Docker-based Testing
+```bash
+# Test script structure
+#!/bin/bash
+# 1. Build Docker image
+# 2. Start container
+# 3. Wait for database ready
+# 4. Run schema tests
+# 5. Run data tests
+# 6. Run constraint tests
+# 7. Run performance tests
+# 8. Cleanup
+```
+
+### SQL Testing
+```bash
+# Manual SQL testing
+psql -U username -d database-name -c "SELECT * FROM table_name;"
+```
+
 ## Deployment Strategy
 
 ### 1. Development
@@ -509,6 +787,20 @@ skaffold dev --module service-name
 skaffold dev
 ```
 
+#### 1.1 AI Configuration (bank-asset-agent)
+```bash
+# Set up Gemini API key
+export GEMINI_API_KEY=your_gemini_api_key
+
+# Run AI-specific tests
+cd src/bank-asset-agent
+python -m pytest tests/test_ai_integration.py
+python -m pytest tests/test_prompt_testing.py
+
+# Run all tests including AI
+python -m pytest tests/
+```
+
 ### 2. Production
 ```bash
 # Deploy to production
@@ -516,6 +808,27 @@ skaffold run --profile production
 
 # Deploy specific service
 skaffold run --module service-name --profile production
+```
+
+## Deployment Patterns
+
+### Skaffold Development
+```bash
+# Deploy specific service
+skaffold dev --module service-name
+
+# Deploy all services
+skaffold dev
+```
+
+### Kubernetes Direct
+```bash
+# Apply configurations
+kubectl apply -f k8s/overlays/development/
+
+# Check status
+kubectl get pods
+kubectl get services
 ```
 
 ## Monitoring and Observability
@@ -552,6 +865,112 @@ skaffold run --module service-name --profile production
 - Transaction immutability
 - Regulatory compliance features
 
+## Security Considerations
+
+### Database Services
+- No JWT authentication required
+- Network-level security via Kubernetes
+- Parameterized queries to prevent SQL injection
+- Environment variables for sensitive data
+
+### Application Services
+- JWT token validation required
+- User context extraction from tokens
+- Input validation and sanitization
+- Proper error handling
+
+## Performance Considerations
+
+### Database Optimization
+- Use indexes for frequently queried columns
+- Implement connection pooling
+- Use prepared statements
+- Monitor query performance
+
+### Application Optimization
+- Implement caching where appropriate
+- Use async operations for I/O
+- Monitor resource usage
+- Implement proper error handling
+
+## Monitoring and Observability
+
+### Database Monitoring
+- Connection pool metrics
+- Query performance metrics
+- Database size and growth
+- Error rates and patterns
+
+### Application Monitoring
+- Request/response metrics
+- Error rates and patterns
+- Resource utilization
+- User activity patterns
+
+## Troubleshooting
+
+### Common Issues
+1. **Connection Issues**: Check environment variables and network connectivity
+2. **Authentication Issues**: Verify JWT token validity and user permissions
+3. **Performance Issues**: Check indexes and query optimization
+4. **Data Issues**: Validate constraints and data integrity
+
+### Debugging Steps
+1. Check service logs: `kubectl logs <pod-name>`
+2. Verify environment variables: `kubectl describe pod <pod-name>`
+3. Test database connectivity: `kubectl exec -it <pod-name> -- psql -U username -d database`
+4. Check service status: `kubectl get services`
+
+## Development Guidelines
+
+### Code Standards
+- Use consistent naming conventions
+- Implement proper error handling
+- Add comprehensive logging
+- Write unit tests for all functions
+
+### Database Standards
+- Use parameterized queries
+- Implement proper constraints
+- Add indexes for performance
+- Use transactions for multi-step operations
+
+### Documentation Standards
+- Update llm.txt files for all database services
+- Include connection examples
+- Document common queries
+- Provide troubleshooting guides
+
+## Getting Started
+
+### Prerequisites
+- Docker and Kubernetes installed
+- Skaffold installed
+- Access to Google Cloud Platform (optional)
+
+### Quick Start
+```bash
+# Clone repository
+git clone <repository-url>
+cd bank-of-anthos
+
+# Deploy with Skaffold
+skaffold dev
+
+# Or deploy specific service
+skaffold dev --module assets-db
+```
+
+### Testing
+```bash
+# Run database tests
+cd src/assets-db/tests
+./run_tests.sh
+
+# Run all tests
+find . -name "run_tests.sh" -exec {} \;
+```
+
 ## LLM Documentation and AI Agent Integration
 
 ### 1. LLM Documentation Files
@@ -581,7 +1000,7 @@ The `bank-asset-agent` provides advanced AI capabilities:
 - Rule-based investment validation
 - Compliance checking and reporting
 - Order execution and management
-- Queue processing and workflow automation
+- Asset management and optimization
 
 #### 2.3 Database Integration
 - Direct database operations via specialized clients
@@ -591,7 +1010,6 @@ The `bank-asset-agent` provides advanced AI capabilities:
 
 ### 3. Service Integration Patterns
 - **HTTP Clients**: RESTful API integration with retry logic
-- **gRPC Services**: High-performance internal communication
 - **Database Clients**: Direct database access with connection management
 - **Error Handling**: Comprehensive error recovery and logging
 
