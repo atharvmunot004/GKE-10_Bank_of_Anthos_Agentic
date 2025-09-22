@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: portfolio-reader-svc
-        image: portfolio-reader-svc
+        image: gcr.io/ffd-gke10/portfolio-reader-svc:latest
         ports:
         - containerPort: 8080
         env:

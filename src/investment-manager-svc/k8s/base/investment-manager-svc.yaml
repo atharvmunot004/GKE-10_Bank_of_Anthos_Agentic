@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
         - name: investment-manager-svc
-          image: investment-manager-svc:latest
+          image: gcr.io/ffd-gke10/investment-manager-svc:latest
           ports:
             - containerPort: 8080
               name: http

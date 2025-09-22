@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: invest-svc
-        image: invest-svc:latest
+        image: gcr.io/ffd-gke10/invest-svc:latest
         ports:
         - containerPort: 8080
         env:
@@ -69,4 +69,4 @@ spec:
           runAsNonRoot: true
           runAsUser: 1000
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
+          readOnlyRootFilesystem: false

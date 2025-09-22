@@ -659,7 +659,7 @@ def create_app():
         except requests.exceptions.RequestException as err:
             app.logger.error('Error fetching portfolio data: %s', str(err))
 
-        return render_template('portfolio.html',
+        return render_template('portfolio-preview.html',
                                account_id=account_id,
                                portfolio=portfolio_data,
                                transactions=portfolio_transactions,
