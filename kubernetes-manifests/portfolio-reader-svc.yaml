@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-reader-svc
+  labels:
+    app: portfolio-reader-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-reader-svc
+  template:
+    metadata:
+      labels:
+        app: portfolio-reader-svc
+    spec:
+      containers:
+      - name: portfolio-reader-svc
+        image: portfolio-reader-svc
+        ports:
+        - containerPort: 8080
+        env:
+        - name: USER_PORTFOLIO_DB_URI
+          value: "postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db"
+        - name: PORT
+          value: "8080"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-reader-svc
+  labels:
+    app: portfolio-reader-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: portfolio-reader-svc
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
