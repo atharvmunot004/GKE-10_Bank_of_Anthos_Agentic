@@ -1,192 +1,187 @@
 # Consistency Manager Service
 
-The `consistency-manager-svc` ensures UUID consistency between the queue-db and portfolio-transaction table. It monitors queue status updates and synchronizes them with portfolio transaction records.
+A microservice that runs continuously to maintain consistency between queue-db and user-portfolio-db by synchronizing transaction statuses and updating portfolio values based on market changes.
 
 ## Overview
 
-This service acts as a bridge between the queue management system and the portfolio transaction system, ensuring that:
+The Consistency Manager Service ensures data consistency across the investment and withdrawal queue systems by:
 
-1. **UUID Consistency**: All transactions maintain the same UUID from origination to completion
-2. **Status Synchronization**: Queue status updates are reflected in portfolio transactions
-3. **Data Integrity**: Portfolio transactions are created/updated based on queue entries
-4. **Real-time Sync**: Background synchronization keeps data consistent
+1. **Monitoring Market Changes**: Calculates delta values for tier market value changes
+2. **Processing Investment Queue**: Updates portfolio values for completed investments
+3. **Processing Withdrawal Queue**: Updates portfolio allocations for completed withdrawals
+4. **Status Synchronization**: Keeps transaction statuses in sync between databases
 
 ## Features
 
-- **Automatic Sync**: Background thread syncs queue entries to portfolio transactions
-- **Manual Sync**: API endpoint for manual synchronization triggers
-- **Health Monitoring**: Health and readiness checks for Kubernetes
-- **Statistics**: API endpoint for monitoring sync statistics
-- **Error Handling**: Robust error handling and logging
-- **Configurable**: Adjustable sync interval and batch size
+- **Continuous Operation**: Runs in background without manual triggers
+- **Market-Based Updates**: Adjusts portfolio values based on tier market value changes
+- **Dual Database Support**: Manages consistency between queue-db and user-portfolio-db
+- **Real-time Processing**: Processes queue entries as they are updated
+- **Health Monitoring**: Provides health and readiness endpoints
 
 ## API Endpoints
 
-### Health Check
-- **GET** `/health` - Service health status
-- **GET** `/ready` - Service readiness status
+### Health & Monitoring
+- `GET /health` - Service health check
+- `GET /ready` - Service readiness check
+- `GET /api/v1/consistency/status` - Get current consistency status
 
-### Operations
-- **POST** `/api/v1/sync` - Manually trigger sync operation
-- **GET** `/api/v1/stats` - Get synchronization statistics
+### Manual Operations
+- `POST /api/v1/consistency/trigger` - Manually trigger consistency cycle
+- `POST /api/v1/consistency/update-tier-values` - Update tier values
 
 ## Environment Variables
 
-- `QUEUE_DB_URI`: Connection string for queue-db
-- `USER_PORTFOLIO_DB_URI`: Connection string for user-portfolio-db
+### Database Configuration
+- `QUEUE_DB_URI`: PostgreSQL connection string for queue-db
+- `USER_PORTFOLIO_DB_URI`: PostgreSQL connection string for user-portfolio-db
+
+### Service Configuration
+- `POLLING_INTERVAL`: Consistency check interval in seconds (default: 30)
 - `PORT`: Service port (default: 8080)
-- `SYNC_INTERVAL`: Sync interval in seconds (default: 30)
-- `BATCH_SIZE`: Number of entries to process per sync (default: 100)
 
-## Database Schema
+### Tier Values
+- `TIER1`: Tier 1 pool value (default: 1000000.0)
+- `TIER1_MV`: Tier 1 market value (default: 1000000.0)
+- `TIER2`: Tier 2 pool value (default: 2000000.0)
+- `TIER2_MV`: Tier 2 market value (default: 2000000.0)
+- `TIER3`: Tier 3 pool value (default: 500000.0)
+- `TIER3_MV`: Tier 3 market value (default: 500000.0)
 
-### Queue Database (queue-db)
-- `investment_queue`: Investment requests
-- `withdrawal_queue`: Withdrawal requests
+## Consistency Process
 
-### Portfolio Database (user-portfolio-db)
-- `portfolio_transactions`: Portfolio transaction records
+### Step 1: Calculate Delta Values
+```
+del_t1_mv = ((TIER1_MV - TIER1) / TIER1)
+del_t2_mv = ((TIER2_MV - TIER2) / TIER2)
+del_t3_mv = ((TIER3_MV - TIER3) / TIER3)
+```
 
-## Synchronization Logic
+### Step 2-4: Process Investment Queue
+1. Query investment_queue for entries updated since last check
+2. Update portfolio_transactions status to 'PROCESSED'
+3. For COMPLETED entries, update portfolio tier values:
+   ```
+   tier1_value = tier1_value * (1 + del_t1_mv)
+   tier2_value = tier2_value * (1 + del_t2_mv)
+   tier3_value = tier3_value * (1 + del_t3_mv)
+   ```
 
-1. **Monitor Queues**: Periodically check for processed queue entries
-2. **Check Existence**: Verify if portfolio transaction already exists
-3. **Create/Update**: Create new transactions or update existing ones
-4. **Status Sync**: Ensure status consistency between systems
-5. **Error Handling**: Log and track synchronization errors
+### Step 5-7: Process Withdrawal Queue
+1. Query withdrawal_queue for entries updated since last check
+2. Update portfolio_transactions status to 'PROCESSED'
+3. For COMPLETED entries, update portfolio tier allocations:
+   ```
+   tier1_allocation = tier1_allocation * (1 - del_t1_mv)
+   tier2_allocation = tier2_allocation * (1 - del_t2_mv)
+   tier3_allocation = tier3_allocation * (1 - del_t3_mv)
+   ```
+
+### Step 8: Update Timestamp
+Update the last processed timestamp to CURRENT_TIMESTAMP
+
+## Development
+
+### Local Development
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export QUEUE_DB_URI="postgresql://queue-admin:queue-pwd@localhost:5432/queue-db"
+export USER_PORTFOLIO_DB_URI="postgresql://portfolio-admin:portfolio-pwd@localhost:5432/user-portfolio-db"
+
+# Run the service
+python consistency_manager_svc.py
+```
+
+### Testing
+```bash
+# Run unit tests
+python -m pytest tests/ -v
+
+# Run specific test
+python -m pytest tests/test_consistency_manager_svc.py -v
+```
+
+### Docker
+```bash
+# Build image
+docker build -t consistency-manager-svc .
+
+# Run container
+docker run -p 8080:8080 consistency-manager-svc
+```
 
 ## Deployment
 
-### Using Skaffold
+### Kubernetes
 ```bash
 # Deploy to development
-skaffold dev --module consistency-manager-svc
-
-# Deploy to production
-skaffold run --module consistency-manager-svc --profile prod
-```
-
-### Using kubectl
-```bash
-# Deploy using Kustomize
 kubectl apply -k k8s/overlays/development
 
-# Deploy using standalone manifest
-kubectl apply -f ../../kubernetes-manifests/consistency-manager-svc.yaml
+# Deploy to production
+kubectl apply -k k8s/overlays/production
+```
+
+### Skaffold
+```bash
+# Run with Skaffold
+skaffold run
 ```
 
 ## Monitoring
 
 ### Health Checks
-```bash
-# Check service health
-curl http://consistency-manager-svc:8080/health
+- **Liveness Probe**: `/health` endpoint
+- **Readiness Probe**: `/ready` endpoint
+- **Consistency Status**: `/api/v1/consistency/status`
 
-# Check service readiness
-curl http://consistency-manager-svc:8080/ready
+### Logging
+The service provides comprehensive logging for:
+- Consistency cycle execution
+- Database operations
+- Error handling
+- Performance metrics
+
+## Integration
+
+### Dependencies
+- **queue-db**: PostgreSQL database for investment and withdrawal queues
+- **user-portfolio-db**: PostgreSQL database for portfolio data
+- **execute-order-svc**: For tier value updates
+- **user-request-queue-svc**: For queue processing
+
+### Data Flow
+1. **Market Changes**: execute-order-svc updates TIER1_MV, TIER2_MV, TIER3_MV
+2. **Queue Processing**: user-request-queue-svc processes investment/withdrawal requests
+3. **Consistency Management**: This service maintains consistency between databases
+4. **Portfolio Updates**: Portfolio values and allocations are updated based on market changes
+
+## Architecture
+
+```
+┌─────────────────────┐    ┌──────────────────────┐
+│   queue-db          │    │  user-portfolio-db   │
+│                     │    │                      │
+│ • investment_queue  │◄──►│ • user_portfolios    │
+│ • withdrawal_queue  │    │ • portfolio_transactions │
+└─────────────────────┘    └──────────────────────┘
+           ▲                          ▲
+           │                          │
+           └─────── consistency-manager-svc ──────┘
 ```
 
-### Statistics
-```bash
-# Get sync statistics
-curl http://consistency-manager-svc:8080/api/v1/stats
-```
+## Performance
 
-### Manual Sync
-```bash
-# Trigger manual sync
-curl -X POST http://consistency-manager-svc:8080/api/v1/sync
-```
-
-## Configuration
-
-### Development
-- Sync interval: 15 seconds
-- Batch size: 50 entries
-- More frequent synchronization for testing
-
-### Production
-- Sync interval: 30 seconds
-- Batch size: 100 entries
-- Optimized for performance
-
-## Dependencies
-
-- **queue-db**: Source of queue entries
-- **user-portfolio-db**: Target for portfolio transactions
-- **PostgreSQL**: Database connections
-- **Flask**: Web framework
-
-## Testing
-
-Unit tests are available in the `tests/` directory:
-
-```bash
-# Run unit tests
-cd tests
-python -m pytest test_consistency_manager.py -v
-
-# Run integration tests
-python -m pytest test_integration.py -v
-```
-
-## Logging
-
-The service provides comprehensive logging:
-
-- **INFO**: Normal operation and sync statistics
-- **WARNING**: Non-critical issues
-- **ERROR**: Sync failures and database errors
-- **DEBUG**: Detailed operation tracing
+- **Polling Interval**: Configurable (default 30 seconds)
+- **Database Connections**: Efficient connection pooling
+- **Error Handling**: Graceful degradation and retry logic
+- **Resource Usage**: Optimized for continuous operation
 
 ## Security
 
-- **Non-root user**: Runs as user 1000
-- **Read-only filesystem**: Security best practices
-- **Resource limits**: CPU and memory constraints
-- **Network policies**: Controlled database access
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Database Connection Failed**
-   - Check database service availability
-   - Verify connection strings
-   - Check network policies
-
-2. **Sync Not Working**
-   - Check service logs
-   - Verify database permissions
-   - Test manual sync endpoint
-
-3. **High Memory Usage**
-   - Reduce batch size
-   - Increase sync interval
-   - Check for memory leaks
-
-### Debug Commands
-
-```bash
-# Check service logs
-kubectl logs -f deployment/consistency-manager-svc
-
-# Check service status
-kubectl describe deployment consistency-manager-svc
-
-# Test database connectivity
-kubectl exec -it deployment/consistency-manager-svc -- python -c "
-import psycopg2
-conn = psycopg2.connect('postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db')
-print('Queue DB connected')
-conn.close()
-"
-```
-
-## Future Enhancements
-
-- **Metrics**: Prometheus metrics for monitoring
-- **Alerting**: Alerts for sync failures
-- **Retry Logic**: Automatic retry for failed syncs
-- **Batch Processing**: More efficient batch operations
-- **Real-time Updates**: WebSocket-based real-time updates
+- **Non-root User**: Container runs as non-root user
+- **Database Security**: Uses connection strings with credentials
+- **Input Validation**: Validates all input parameters
+- **Error Handling**: Secure error messages without sensitive data exposure

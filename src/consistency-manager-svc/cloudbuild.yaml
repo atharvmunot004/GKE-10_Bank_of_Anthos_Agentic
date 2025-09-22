@@ -1,0 +1,21 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'gcr.io/$PROJECT_ID/consistency-manager-svc:$COMMIT_SHA',
+      '-t', 'gcr.io/$PROJECT_ID/consistency-manager-svc:latest',
+      '.'
+    ]
+    dir: 'src/consistency-manager-svc'
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/consistency-manager-svc:$COMMIT_SHA']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/consistency-manager-svc:latest']
+
+images:
+  - 'gcr.io/$PROJECT_ID/consistency-manager-svc:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/consistency-manager-svc:latest'

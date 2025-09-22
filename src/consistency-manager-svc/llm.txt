@@ -1,4 +1,288 @@
 microservice-description:
 {
-  task: "
+  description: "this microservice runs continuously and doesn't need to be triggerd",
+  environment_variables_used: [TIER1, TIER1_MV, TIER2, TIER2_MV, TIER3, TIER3_MV],
+  tasks: {
+    step1: "calculates values of variables del_t1_mv = ((TIER1_MV - TIER1) / TIER1), del_t2_mv = ((TIER2_MV - TIER2) / TIER2), del_t3_mv = ((TIER3_MV - TIER3) / TIER3) ",
+    step2: "queries investment_queue table of the queue-db for all the entries in it which have updated_at > timestamp",
+    step3: "using the uuids it receives from the previous step, it updates the status of the same uuids in the portfolio-transactions table of the user-portfolio-db",
+    step4: "if the status of entries in investment_queue is COMPLETED we update the values tier1_value = tier1_value(1 + del_t1_mv), tier2_value = tier2_value(1 + del_t2_mv), tier3_value = tier3_value(1 + del_t3_mv) for the accountid associated with that uuid in the user-portfolios table of the user-portfolio-db",
+    step5: "queries withdrawal_queue table of the queue-db for all the entries in it which have updated_at > timestamp",
+    step6: "using the uuids it receives from the previous step, it updates the status of the same uuids in the portfolio-transactions table of the user-portfolio-db",
+    step7: "if the status of entries in withdrawal_queue is COMPLETED we update the values tier1_allocation = tier1_allocation(1 - del_t1_mv), tier2_allocation = tier2_allocation(1 - del_t2_mv), tier3_allocation = tier3_allocation(1 - del_t3_mv) for the accountid associated with that uuid in the user-portfolios table of the user-portfolio-db",
+    step8: "update the timestamp variable to CURRENT_TIMESTAMP"
+  }
 }
+----append content after this----
+
+# Consistency Manager Service (consistency-manager-svc) - AI Agent Documentation
+
+## Service Overview
+The Consistency Manager Service is a continuous background microservice that maintains data consistency between queue-db and user-portfolio-db by synchronizing transaction statuses and updating portfolio values based on market changes. It runs automatically without manual triggers.
+
+## Core Functionality
+
+### Continuous Operation
+- **Background Processing**: Runs continuously in a background thread
+- **Polling Interval**: Configurable interval for consistency checks (default: 30 seconds)
+- **Automatic Triggers**: No manual intervention required
+- **Real-time Updates**: Processes queue entries as they are updated
+
+### Consistency Management Process
+1. **Step 1**: Calculate delta values for tier market value changes
+2. **Step 2**: Query investment_queue for updated entries
+3. **Step 3**: Update portfolio_transactions status for investment entries
+4. **Step 4**: Update portfolio tier values for completed investments
+5. **Step 5**: Query withdrawal_queue for updated entries
+6. **Step 6**: Update portfolio_transactions status for withdrawal entries
+7. **Step 7**: Update portfolio tier allocations for completed withdrawals
+8. **Step 8**: Update timestamp for next cycle
+
+## API Endpoints
+
+### Health & Monitoring
+- `GET /health` - Service health check
+- `GET /ready` - Service readiness check (includes database connectivity)
+- `GET /api/v1/consistency/status` - Get current consistency status and tier values
+
+### Manual Operations
+- `POST /api/v1/consistency/trigger` - Manually trigger a consistency cycle
+- `POST /api/v1/consistency/update-tier-values` - Update tier values from external sources
+
+## Request/Response Formats
+
+### Update Tier Values
+```json
+POST /api/v1/consistency/update-tier-values
+{
+  "TIER1": "1200000.0",
+  "TIER1_MV": "1300000.0",
+  "TIER2": "2200000.0",
+  "TIER2_MV": "2300000.0",
+  "TIER3": "520000.0",
+  "TIER3_MV": "570000.0"
+}
+```
+
+### Consistency Status Response
+```json
+{
+  "status": "success",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "tier_values": {
+    "TIER1": 1000000.0,
+    "TIER1_MV": 1100000.0,
+    "TIER2": 2000000.0,
+    "TIER2_MV": 2100000.0,
+    "TIER3": 500000.0,
+    "TIER3_MV": 550000.0
+  },
+  "delta_values": {
+    "del_t1_mv": 0.1,
+    "del_t2_mv": 0.05,
+    "del_t3_mv": 0.1
+  },
+  "polling_interval": 30
+}
+```
+
+### Consistency Cycle Result
+```json
+{
+  "status": "success",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "delta_values": {
+    "del_t1_mv": 0.1,
+    "del_t2_mv": 0.05,
+    "del_t3_mv": 0.1
+  },
+  "investment_processed": 5,
+  "investment_completed": 3,
+  "withdrawal_processed": 2,
+  "withdrawal_completed": 1
+}
+```
+
+## Environment Variables
+
+### Database Configuration
+- `QUEUE_DB_URI`: PostgreSQL connection string for queue-db
+- `USER_PORTFOLIO_DB_URI`: PostgreSQL connection string for user-portfolio-db
+
+### Service Configuration
+- `POLLING_INTERVAL`: Consistency check interval in seconds (default: 30)
+- `PORT`: Service port (default: 8080)
+
+### Tier Values (Core Environment Variables)
+- `TIER1`: Tier 1 pool value (default: 1000000.0)
+- `TIER1_MV`: Tier 1 market value (default: 1000000.0)
+- `TIER2`: Tier 2 pool value (default: 2000000.0)
+- `TIER2_MV`: Tier 2 market value (default: 2000000.0)
+- `TIER3`: Tier 3 pool value (default: 500000.0)
+- `TIER3_MV`: Tier 3 market value (default: 500000.0)
+
+## Database Integration
+
+### Queue Database (queue-db)
+- **Tables**: investment_queue, withdrawal_queue
+- **Operations**: SELECT for updated entries
+- **Fields**: uuid, accountid, status, updated_at
+
+### Portfolio Database (user-portfolio-db)
+- **Tables**: user_portfolios, portfolio_transactions
+- **Operations**: UPDATE for status and values
+- **Fields**: tier1_value, tier2_value, tier3_value, tier1_allocation, tier2_allocation, tier3_allocation
+
+### Database Operations
+```sql
+-- Get updated investment queue entries
+SELECT uuid, accountid, status, updated_at
+FROM investment_queue 
+WHERE updated_at > %s
+ORDER BY updated_at ASC
+
+-- Get updated withdrawal queue entries
+SELECT uuid, accountid, status, updated_at
+FROM withdrawal_queue 
+WHERE updated_at > %s
+ORDER BY updated_at ASC
+
+-- Update portfolio transaction status
+UPDATE portfolio_transactions 
+SET status = %s, updated_at = CURRENT_TIMESTAMP
+WHERE uuid = %s
+
+-- Update portfolio tier values (investments)
+UPDATE user_portfolios 
+SET tier1_value = %s, tier2_value = %s, tier3_value = %s,
+    total_value = %s, updated_at = CURRENT_TIMESTAMP
+WHERE accountid = %s
+
+-- Update portfolio tier allocations (withdrawals)
+UPDATE user_portfolios 
+SET tier1_allocation = %s, tier2_allocation = %s, tier3_allocation = %s,
+    total_allocation = %s, updated_at = CURRENT_TIMESTAMP
+WHERE accountid = %s
+```
+
+## Step-by-Step Process Details
+
+### Step 1: Calculate Delta Values
+```python
+del_t1_mv = ((TIER1_MV - TIER1) / TIER1) if TIER1 != 0 else 0
+del_t2_mv = ((TIER2_MV - TIER2) / TIER2) if TIER2 != 0 else 0
+del_t3_mv = ((TIER3_MV - TIER3) / TIER3) if TIER3 != 0 else 0
+```
+
+### Step 2-4: Process Investment Queue
+1. **Query**: Get investment_queue entries updated since last timestamp
+2. **Status Update**: Update portfolio_transactions status to 'PROCESSED'
+3. **Value Update**: For COMPLETED entries, update portfolio tier values:
+   ```
+   tier1_value = tier1_value * (1 + del_t1_mv)
+   tier2_value = tier2_value * (1 + del_t2_mv)
+   tier3_value = tier3_value * (1 + del_t3_mv)
+   total_value = tier1_value + tier2_value + tier3_value
+   ```
+
+### Step 5-7: Process Withdrawal Queue
+1. **Query**: Get withdrawal_queue entries updated since last timestamp
+2. **Status Update**: Update portfolio_transactions status to 'PROCESSED'
+3. **Allocation Update**: For COMPLETED entries, update portfolio tier allocations:
+   ```
+   tier1_allocation = tier1_allocation * (1 - del_t1_mv)
+   tier2_allocation = tier2_allocation * (1 - del_t2_mv)
+   tier3_allocation = tier3_allocation * (1 - del_t3_mv)
+   total_allocation = tier1_allocation + tier2_allocation + tier3_allocation
+   ```
+
+### Step 8: Update Timestamp
+```python
+last_timestamp = CURRENT_TIMESTAMP
+```
+
+## Integration Points
+
+### Dependencies
+- **queue-db**: PostgreSQL database for investment and withdrawal queues
+- **user-portfolio-db**: PostgreSQL database for portfolio data
+- **execute-order-svc**: Updates TIER1_MV, TIER2_MV, TIER3_MV values
+- **user-request-queue-svc**: Processes investment/withdrawal requests
+
+### Service Communication
+- **Input**: Tier values from execute-order-svc
+- **Processing**: Queue entries from user-request-queue-svc
+- **Output**: Portfolio updates to user-portfolio-db
+- **Monitoring**: Health and status endpoints
+
+## Usage Examples for AI Agents
+
+### 1. Check Service Status
+```bash
+curl -X GET http://consistency-manager-svc:8080/health
+curl -X GET http://consistency-manager-svc:8080/api/v1/consistency/status
+```
+
+### 2. Update Tier Values
+```bash
+curl -X POST http://consistency-manager-svc:8080/api/v1/consistency/update-tier-values \
+  -H "Content-Type: application/json" \
+  -d '{
+    "TIER1_MV": "1100000.0",
+    "TIER2_MV": "2100000.0",
+    "TIER3_MV": "550000.0"
+  }'
+```
+
+### 3. Manually Trigger Consistency Cycle
+```bash
+curl -X POST http://consistency-manager-svc:8080/api/v1/consistency/trigger
+```
+
+### 4. Monitor Consistency Process
+```bash
+curl -X GET http://consistency-manager-svc:8080/api/v1/consistency/status
+```
+
+## AI Agent Decision Making Support
+
+### Consistency Monitoring
+- Monitor delta values for market change detection
+- Track processing statistics for performance insights
+- Use timestamps for temporal consistency validation
+
+### Portfolio Management
+- Understand how market changes affect portfolio values
+- Monitor investment vs withdrawal processing patterns
+- Track completion rates and processing efficiency
+
+### System Integration
+- Coordinate with execute-order-svc for tier value updates
+- Monitor user-request-queue-svc processing status
+- Ensure data consistency across all portfolio operations
+
+## Performance Characteristics
+- **Continuous Operation**: Runs 24/7 without manual intervention
+- **Configurable Polling**: Adjustable consistency check intervals
+- **Efficient Processing**: Batch processing of queue entries
+- **Database Optimization**: Optimized queries with proper indexing
+- **Error Resilience**: Graceful error handling and recovery
+
+## Monitoring and Health
+- Health endpoint for service monitoring
+- Readiness check includes database connectivity
+- Comprehensive logging for consistency operations
+- Performance metrics and processing statistics
+- Real-time status and tier value monitoring
+
+## Error Handling
+- **Database Failures**: Graceful handling of connection issues
+- **Processing Errors**: Continue operation despite individual failures
+- **Data Validation**: Input validation for all operations
+- **Recovery Mechanisms**: Automatic retry and recovery logic
+
+## Security Considerations
+- **Database Security**: Secure connection strings with credentials
+- **Input Validation**: Validates all input parameters
+- **Error Messages**: Secure error messages without sensitive data
+- **Access Control**: Proper service-to-service authentication
