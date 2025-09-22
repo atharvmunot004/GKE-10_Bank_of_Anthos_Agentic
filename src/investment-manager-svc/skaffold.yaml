@@ -1,0 +1,16 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: investment-manager-svc
+build:
+  artifacts:
+    - image: investment-manager-svc
+      context: .
+      docker:
+        dockerfile: Dockerfile
+  local:
+    push: false
+deploy:
+  kustomize:
+    paths:
+      - k8s/overlays/development
