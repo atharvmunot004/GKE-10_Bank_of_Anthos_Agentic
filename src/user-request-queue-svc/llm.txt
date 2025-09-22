@@ -1,0 +1,5 @@
+Service Description:
+    -> a queue based microservice, 
+    -> gets request from user-tier-agent, update queue-db accordingly,
+    -> send requests to bank-asset-agent,
+    -> sends same request to rule-checker-svc
