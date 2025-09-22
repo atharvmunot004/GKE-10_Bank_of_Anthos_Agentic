@@ -67,5 +67,8 @@ requires:
 - configs:
   - execute-order-svc
   path: src/execute-order-svc/skaffold.yaml
+- configs:
+  - consistency-manager-svc
+  path: src/consistency-manager-svc/skaffold.yaml
 deploy:
   tolerateFailuresUntilDeadline: true

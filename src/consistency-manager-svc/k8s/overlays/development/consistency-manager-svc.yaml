@@ -1,28 +1,22 @@
-# Copyright 2024 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: consistency-manager-svc
 spec:
+  replicas: 1
   template:
     spec:
       containers:
-        - name: consistency-manager-svc
-          env:
-            - name: SYNC_INTERVAL
-              value: "15"  # More frequent sync in development
-            - name: BATCH_SIZE
-              value: "50"  # Smaller batch size in development
+      - name: consistency-manager-svc
+        env:
+        - name: POLLING_INTERVAL
+          value: "10"
+        - name: QUEUE_DB_URI
+          value: "postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db"
+        - name: USER_PORTFOLIO_DB_URI
+          value: "postgresql://portfolio-admin:portfolio-pwd@user-portfolio-db:5432/user-portfolio-db"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consistency-manager-svc
