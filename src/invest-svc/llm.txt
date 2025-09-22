@@ -1,3 +1,45 @@
+micro-service-description:
+|-> receive: {
+|     accountid, 
+|     amount
+|   } header includes the JWT access token
+|   from investment-manager-svc
+|   |-> checks the balance by calling balancereader microservice for the account's current balance
+|   |   |-> request:
+|   |   |   using the JWT token received from invesment-manager-svc
+|   |   |-> gets the balance of that account
+|   |   |-> iff the balance of the account if >= amount processed
+|   |-> calls the user-tier-agent 
+|   |   |-> request: 
+|   |   |   using the JWT token received from invesment-manager-svc
+|   |   |   {
+|   |   |     accountid,
+|   |   |     amount,
+|   |   |     uuid [generate this, this will not be generated anywhere else],
+|   |   |     purpose: "INVEST"
+|   |   |   }
+|   |   |-> return:
+|   |       {
+|   |         accountid,
+|   |         amount,
+|   |         uuid,
+|   |         tier1,
+|   |         tier2,
+|   |         tier3,
+|   |       }
+|   |-> adds {accountid, amount, uuid, + tier1, + tier2, + tier3, transaction_type: INVEST, created_at: TIMESTAMPTZ, status: PENDING} to user-portfolio-db table portfolio-Transactions
+|   |-> update user-portfolio-db table user-portfolios accountid:
+|       {
+|         tier1_allocation = tier1_allocation + tier1,
+|         tier2_allocation = tier2_allocation + tier2,
+|         tier3_allocation = tier3_allocation + tier3
+|       }
+|-> returns status to invesment-manager-svc
+
+--- created by Chinmay and Atharv for agent 
+--------------------------------------------------------------
+--- created by agent for agent
+
 # Invest Service (invest-svc) - AI Agent Documentation
 
 ## Service Overview
@@ -5,6 +47,7 @@ The invest-svc microservice is a critical component of the Bank of Anthos portfo
 
 ## Core Functionality
 - **Investment Processing**: Accepts investment requests with account number and amount
+- **Balance Verification**: Checks account balance via balancereader service
 - **Tier Allocation**: Calls user-tier-agent to determine tier1, tier2, tier3 fund allocations
 - **Portfolio Management**: Creates or updates user portfolios in user-portfolio-db
 - **Transaction Recording**: Maintains audit trail of all investment transactions
@@ -18,10 +61,11 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 
 ## API Endpoints
 
-### POST /invest
+### POST /api/v1/invest
 **Purpose**: Process an investment request
 **Method**: POST
 **Content-Type**: application/json
+**Authentication**: JWT token forwarded from investment-manager-svc
 
 **Request Body**:
 ```json
@@ -34,8 +78,9 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 **Success Response (200)**:
 ```json
 {
-  "status": "success",
+  "status": "done",
   "portfolio_id": "uuid",
+  "transaction_id": "uuid",
   "total_invested": 1000.0,
   "tier1_amount": 600.0,
   "tier2_amount": 300.0,
@@ -46,9 +91,10 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 
 **Error Responses**:
 - 400: Invalid input (missing account_number or amount ≤ 0)
+- 400: Insufficient balance for investment
 - 500: Processing error (database or user-tier-agent unavailable)
 
-### GET /portfolio/{user_id}
+### GET /api/v1/portfolio/{user_id}
 **Purpose**: Retrieve user portfolio information
 **Method**: GET
 
@@ -74,6 +120,28 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 - 404: Portfolio not found
 - 500: Internal server error
 
+### GET /api/v1/portfolio/{user_id}/transactions
+**Purpose**: Retrieve user portfolio transactions
+**Method**: GET
+
+**Success Response (200)**:
+```json
+[
+  {
+    "id": "uuid",
+    "transaction_type": "DEPOSIT",
+    "tier1_change": 600.0,
+    "tier2_change": 300.0,
+    "tier3_change": 100.0,
+    "total_amount": 1000.0,
+    "fees": 0.0,
+    "status": "PENDING",
+    "created_at": "timestamp",
+    "updated_at": "timestamp"
+  }
+]
+```
+
 ### GET /health
 **Purpose**: Health check endpoint
 **Method**: GET
@@ -83,6 +151,30 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 **Purpose**: Readiness check endpoint
 **Method**: GET
 **Response**: `{"status": "ready"}` or `{"status": "not ready", "error": "..."}`
+
+## JWT Authentication Integration
+
+### JWT Token Flow
+The invest-svc receives JWT tokens from investment-manager-svc and forwards them to external services:
+
+```
+Frontend → investment-manager-svc → invest-svc → user-tier-agent/balancereader
+    ↓              ↓                    ↓              ↓
+JWT Token    JWT Token           JWT Token      JWT Token
+```
+
+### Authentication Headers
+```python
+def get_auth_headers_from_request(request) -> dict:
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1]
+        return {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+    return {'Content-Type': 'application/json'}
+```
 
 ## Database Schema Integration
 
@@ -111,24 +203,32 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
    - Purpose: Portfolio data storage and retrieval
 
 2. **user-tier-agent**: Tier allocation service
-   - Connection: `USER_TIER_AGENT_URL` environment variable
+   - Connection: `USER_TIER_AGENT_URI` environment variable
    - Endpoint: `POST /allocate`
    - Purpose: Determines fund tier allocations
 
+3. **balancereader**: Account balance service
+   - Connection: `BALANCE_READER_URI` environment variable
+   - Endpoint: `GET /balances/{account_id}`
+   - Purpose: Verifies account has sufficient balance
+
 ### Environment Variables
 - `USER_PORTFOLIO_DB_URI`: Database connection string
-- `USER_TIER_AGENT_URL`: User tier agent service URL
+- `USER_TIER_AGENT_URI`: User tier agent service URL
+- `BALANCE_READER_URI`: Balance reader service URL
 - `PORT`: Service port (default: 8080)
+- `REQUEST_TIMEOUT`: Request timeout in seconds (default: 30)
 
 ## Business Logic
 
 ### Investment Processing Flow
 1. **Validation**: Validate account_number and amount parameters
-2. **Tier Allocation**: Call user-tier-agent with account_number and amount
-3. **Portfolio Lookup**: Check if user has existing portfolio
-4. **Portfolio Update**: Create new or update existing portfolio
-5. **Transaction Recording**: Log the investment transaction
-6. **Response**: Return investment result with allocation details
+2. **Balance Check**: Call balancereader to verify sufficient funds
+3. **Tier Allocation**: Call user-tier-agent with account_number and amount
+4. **Portfolio Lookup**: Check if user has existing portfolio
+5. **Portfolio Update**: Create new or update existing portfolio
+6. **Transaction Recording**: Log the investment transaction
+7. **Response**: Return investment result with allocation details
 
 ### Tier Allocation Rules
 - All investments are allocated across three tiers: tier1, tier2, tier3
@@ -138,9 +238,40 @@ Client Request → invest-svc → user-tier-agent → user-portfolio-db
 
 ### Error Handling
 - **Input Validation**: Rejects invalid account numbers or amounts
-- **Service Dependencies**: Handles user-tier-agent unavailability
+- **Balance Verification**: Ensures sufficient account balance
+- **Service Dependencies**: Handles user-tier-agent and balancereader unavailability
 - **Database Errors**: Manages database connection and transaction failures
 - **Data Consistency**: Ensures portfolio data integrity
+
+## Integration Patterns
+
+### For investment-manager-svc
+When calling invest-svc from investment-manager-svc:
+
+```python
+# Example integration
+auth_headers = get_auth_headers_from_request(request)
+invest_response = requests.post(
+    f'{INVEST_SVC_URI}/api/v1/invest',
+    json=invest_request,
+    headers=auth_headers,
+    timeout=REQUEST_TIMEOUT
+)
+```
+
+### For New Microservices
+When creating microservices that need to process investments:
+
+1. **Use invest-svc API**: Call POST /api/v1/invest endpoint
+2. **Handle Responses**: Process success/error responses appropriately
+3. **Error Handling**: Implement retry logic for service unavailability
+4. **Data Validation**: Validate inputs before calling invest-svc
+
+### For Frontend Applications
+- **Investment Forms**: Submit to invest-svc /api/v1/invest endpoint
+- **Portfolio Display**: Fetch data from /api/v1/portfolio/{user_id} endpoint
+- **Error Handling**: Display appropriate error messages to users
+- **Loading States**: Handle async investment processing
 
 ## Deployment Information
 
@@ -176,48 +307,20 @@ kubectl apply -k src/invest-svc/k8s/overlays/development
 curl http://invest-svc:8080/health
 
 # Process investment
-curl -X POST http://invest-svc:8080/invest \
+curl -X POST http://invest-svc:8080/api/v1/invest \
   -H "Content-Type: application/json" \
   -d '{"account_number": "1234567890", "amount": 1000.0}'
 
 # Get portfolio
-curl http://invest-svc:8080/portfolio/1234567890
+curl http://invest-svc:8080/api/v1/portfolio/1234567890
 ```
-
-### Automated Testing
-```bash
-# Run test script
-python src/invest-svc/test_invest_src.py
-```
-
-## Integration Patterns
-
-### For New Microservices
-When creating microservices that need to process investments:
-
-1. **Use invest-svc API**: Call POST /invest endpoint
-2. **Handle Responses**: Process success/error responses appropriately
-3. **Error Handling**: Implement retry logic for service unavailability
-4. **Data Validation**: Validate inputs before calling invest-svc
-
-### For Frontend Applications
-- **Investment Forms**: Submit to invest-svc /invest endpoint
-- **Portfolio Display**: Fetch data from /portfolio/{user_id} endpoint
-- **Error Handling**: Display appropriate error messages to users
-- **Loading States**: Handle async investment processing
-
-### For Backend Services
-- **Service Discovery**: Use Kubernetes service name 'invest-svc'
-- **Circuit Breaker**: Implement circuit breaker pattern for reliability
-- **Monitoring**: Add metrics for investment processing success/failure rates
-- **Logging**: Include correlation IDs for request tracing
 
 ## Security Considerations
 
 ### Authentication
-- Service uses internal cluster communication
-- No external authentication required
-- JWT tokens handled by upstream services
+- Service uses JWT token forwarding from investment-manager-svc
+- No direct external authentication required
+- JWT tokens validated by upstream services
 
 ### Data Protection
 - Database connections use encrypted connections
@@ -250,9 +353,10 @@ When creating microservices that need to process investments:
 
 ### Common Issues
 1. **Database Connection Failed**: Check USER_PORTFOLIO_DB_URI configuration
-2. **User Tier Agent Unavailable**: Verify USER_TIER_AGENT_URL and service status
-3. **Portfolio Not Found**: Ensure user has existing portfolio or create new one
-4. **Invalid Allocation**: Verify tier allocations sum to 100%
+2. **User Tier Agent Unavailable**: Verify USER_TIER_AGENT_URI and service status
+3. **Balance Reader Unavailable**: Check BALANCE_READER_URI and service status
+4. **Portfolio Not Found**: Ensure user has existing portfolio or create new one
+5. **Invalid Allocation**: Verify tier allocations sum to 100%
 
 ### Debug Commands
 ```bash
@@ -293,13 +397,14 @@ kubectl exec -it <pod-name> -- curl http://localhost:8080/health
 ### Documentation
 - **README**: src/invest-svc/README.md
 - **API Docs**: This file (llm.txt)
-- **Code**: src/invest-svc/invest_src.py
+- **Code**: src/invest-svc/invest_svc.py
 
 ### Related Services
 - **user-portfolio-db**: Portfolio data storage
 - **user-tier-agent**: Tier allocation service
+- **balancereader**: Account balance service
+- **investment-manager-svc**: Service orchestrator
 - **frontend**: User interface
-- **userservice**: User authentication
 
 ---
 

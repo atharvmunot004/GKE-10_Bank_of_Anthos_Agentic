@@ -1,5 +1,5 @@
 micro-service-description:
-  |-> will get account_id from frontend
+  |-> will get account_id, and JWT bearer token from frontend
   |
   |-> calls portfolio-reader-svc using the account_id to get current portfolio and the last 30 portfolio transaction details
   |   |-> request: {
@@ -28,7 +28,7 @@ micro-service-description:
   |   |-> response: {
   |   |     status
   |   |   }
-  |   |-> if status is 'done': requests ledger-writer add a ledger accordingly
+  |   |-> if status is 'done': requests ledger-writer add a ledger accordingly using the same JWT bearer token that it received from frontend
   |       |-> else: return error message to frontend
   |     
   |-> if withdrawal triggered calls withdraw-svc, and reloads the page
@@ -39,7 +39,7 @@ micro-service-description:
       |-> response: {
       |     status
       |   }
-      |-> if status is 'done': requests ledger-writer add a ledger accordingly
+      |-> if status is 'done': requests ledger-writer add a ledger accordingly using the same JWT bearer token that it received from frontend
           |-> else: return error message to frontend
 
 ---created by Chinmay and Atharv for agent    
