@@ -26,7 +26,7 @@ BEGIN
     SELECT COUNT(*) INTO column_count
     FROM information_schema.columns 
     WHERE table_name = 'user_portfolios' 
-    AND column_name IN ('id', 'user_id', 'total_value', 'currency', 'tier1_allocation', 'tier2_allocation', 'tier3_allocation', 'tier1_value', 'tier2_value', 'tier3_value', 'created_at', 'updated_at');
+    AND column_name IN ('accountid', 'currency', 'tier1_allocation', 'tier2_allocation', 'tier3_allocation', 'total_allocation', 'tier1_value', 'tier2_value', 'tier3_value', 'total_value', 'created_at', 'updated_at');
     
     IF column_count = 12 THEN
         RAISE NOTICE 'PASS: user_portfolios table has all required columns';
