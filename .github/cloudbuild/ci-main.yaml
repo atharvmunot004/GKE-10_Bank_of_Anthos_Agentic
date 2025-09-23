@@ -1,0 +1,88 @@
+# Cloud Build configuration for main branch deployment
+steps:
+  # Step 1: Build all services
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Build all service images
+        services=("frontend" "accounts/contacts" "accounts/userservice" "ledger/balancereader" "ledger/ledgerwriter" "ledger/transactionhistory" "accounts/accounts-db" "ledger/ledger-db" "loadgenerator" "investment-manager-svc" "invest-svc" "portfolio-reader-svc" "user-portfolio-db" "withdraw-svc" "user-request-queue-svc" "market-reader-svc" "execute-order-svc" "consistency-manager-svc" "user-tier-agent" "assets-db" "queue-db")
+        
+        for service in "${services[@]}"; do
+          echo "Building $service..."
+          cd src/$service
+          docker build -t $_CONTAINER_REGISTRY/$service:$COMMIT_SHA .
+          docker push $_CONTAINER_REGISTRY/$service:$COMMIT_SHA
+          docker tag $_CONTAINER_REGISTRY/$service:$COMMIT_SHA $_CONTAINER_REGISTRY/$service:latest
+          docker push $_CONTAINER_REGISTRY/$service:latest
+          cd ../..
+        done
+
+  # Step 2: Deploy to staging using Skaffold
+  - name: 'gcr.io/k8s-skaffold/skaffold'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Deploy all services to staging
+        services=("frontend" "accounts/contacts" "accounts/userservice" "ledger/balancereader" "ledger/ledgerwriter" "ledger/transactionhistory" "accounts/accounts-db" "ledger/ledger-db" "loadgenerator" "investment-manager-svc" "invest-svc" "portfolio-reader-svc" "user-portfolio-db" "withdraw-svc" "user-request-queue-svc" "market-reader-svc" "execute-order-svc" "consistency-manager-svc" "user-tier-agent" "assets-db" "queue-db")
+        
+        for service in "${services[@]}"; do
+          echo "Deploying $service to staging..."
+          cd src/$service
+          skaffold run --default-repo=$_CONTAINER_REGISTRY --tag=$COMMIT_SHA --profile=staging
+          cd ../..
+        done
+
+  # Step 3: Run tests on staging
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get staging cluster credentials
+        gcloud container clusters get-credentials staging --region=$_REGION --project=$PROJECT_ID
+        
+        # Wait for deployments to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment --all -n bank-of-anthos-staging
+        
+        # Run integration tests
+        for service in frontend investment-manager-svc invest-svc user-tier-agent; do
+          echo "Testing $service..."
+          cd src/$service/tests
+          if [ -f "test_${service//-/_}.py" ]; then
+            python -m pytest test_${service//-/_}.py -v
+          fi
+          cd ../../..
+        done
+
+  # Step 4: Deploy to production (with approval)
+  - name: 'gcr.io/k8s-skaffold/skaffold'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Deploy all services to production
+        services=("frontend" "accounts/contacts" "accounts/userservice" "ledger/balancereader" "ledger/ledgerwriter" "ledger/transactionhistory" "accounts/accounts-db" "ledger/ledger-db" "loadgenerator" "investment-manager-svc" "invest-svc" "portfolio-reader-svc" "user-portfolio-db" "withdraw-svc" "user-request-queue-svc" "market-reader-svc" "execute-order-svc" "consistency-manager-svc" "user-tier-agent" "assets-db" "queue-db")
+        
+        for service in "${services[@]}"; do
+          echo "Deploying $service to production..."
+          cd src/$service
+          skaffold run --default-repo=$_CONTAINER_REGISTRY --tag=$COMMIT_SHA --profile=production
+          cd ../..
+        done
+
+# Substitutions
+substitutions:
+  _REGION: us-central1
+  _CONTAINER_REGISTRY: us-central1-docker.pkg.dev/$PROJECT_ID/bank-of-anthos
+
+# Options
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 100
+
+# Timeout
+timeout: '1200s'

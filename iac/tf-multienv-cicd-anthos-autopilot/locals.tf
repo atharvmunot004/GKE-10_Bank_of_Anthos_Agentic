@@ -13,7 +13,31 @@
 # limitations under the License.
 
 locals {
-  services         = ["frontend", "accounts/contacts", "accounts/userservice", "ledger/balancereader", "ledger/ledgerwriter", "ledger/transactionhistory"] # List of service paths as string
+  services         = [
+    # Original 9 services
+    "frontend", 
+    "accounts/contacts", 
+    "accounts/userservice", 
+    "ledger/balancereader", 
+    "ledger/ledgerwriter", 
+    "ledger/transactionhistory",
+    "accounts/accounts-db",
+    "ledger/ledger-db",
+    "loadgenerator",
+    # New 13 services
+    "investment-manager-svc",
+    "invest-svc", 
+    "portfolio-reader-svc",
+    "user-portfolio-db",
+    "withdraw-svc",
+    "user-request-queue-svc", 
+    "market-reader-svc",
+    "execute-order-svc",
+    "consistency-manager-svc",
+    "user-tier-agent",
+    "assets-db",
+    "queue-db"
+  ] # List of service paths as string
   application_name = "bank-of-anthos"                                                                                                                      # used for naming of resources
   cluster_names    = toset(["development", "staging", "production"])                                                                                       # used to create network configuration below
   network_name     = "shared-gke"                                                                                                                          # VPC containing resources will be given this name

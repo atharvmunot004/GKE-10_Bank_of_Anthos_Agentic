@@ -1,0 +1,148 @@
+name: Main Branch Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  CLUSTER_NAME: bank-of-anthos-cluster
+
+jobs:
+  # Job 1: Build and Push Images
+  build-and-push:
+    name: Build and Push Container Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Google Auth
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Configure Docker
+      run: gcloud auth configure-docker $REGION-docker.pkg.dev
+      
+    - name: Build and Push Images
+      run: |
+        # Build and push all service images
+        for service in frontend accounts/contacts accounts/userservice ledger/balancereader ledger/ledgerwriter ledger/transactionhistory accounts/accounts-db ledger/ledger-db loadgenerator investment-manager-svc invest-svc portfolio-reader-svc user-portfolio-db withdraw-svc user-request-queue-svc market-reader-svc execute-order-svc consistency-manager-svc user-tier-agent assets-db queue-db; do
+          echo "Building $service..."
+          cd src/$service
+          docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/bank-of-anthos/$service:$GITHUB_SHA .
+          docker push $REGION-docker.pkg.dev/$PROJECT_ID/bank-of-anthos/$service:$GITHUB_SHA
+          cd ../..
+        done
+
+  # Job 2: Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Get GKE Credentials
+      run: gcloud container clusters get-credentials staging --region $REGION --project $PROJECT_ID
+      
+    - name: Deploy to Staging
+      run: |
+        # Deploy all services to staging
+        for service in frontend accounts/contacts accounts/userservice ledger/balancereader ledger/ledgerwriter ledger/transactionhistory accounts/accounts-db ledger/ledger-db loadgenerator investment-manager-svc invest-svc portfolio-reader-svc user-portfolio-db withdraw-svc user-request-queue-svc market-reader-svc execute-order-svc consistency-manager-svc user-tier-agent assets-db queue-db; do
+          echo "Deploying $service to staging..."
+          cd src/$service
+          skaffold run --default-repo=$REGION-docker.pkg.dev/$PROJECT_ID/bank-of-anthos --tag=$GITHUB_SHA --profile=staging
+          cd ../..
+        done
+
+  # Job 3: Run Tests
+  test-staging:
+    name: Run Tests on Staging
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Get GKE Credentials
+      run: gcloud container clusters get-credentials staging --region $REGION --project $PROJECT_ID
+      
+    - name: Run Integration Tests
+      run: |
+        # Wait for services to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment --all -n bank-of-anthos-staging
+        
+        # Run tests
+        for service in frontend investment-manager-svc invest-svc user-tier-agent; do
+          echo "Testing $service..."
+          cd src/$service/tests
+          if [ -f "test_${service//-/_}.py" ]; then
+            python -m pytest test_${service//-/_}.py -v
+          fi
+          cd ../../..
+        done
+
+  # Job 4: Deploy to Production (Manual Approval)
+  deploy-production:
+    name: Deploy to Production
+    needs: test-staging
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Get GKE Credentials
+      run: gcloud container clusters get-credentials production --region $REGION --project $PROJECT_ID
+      
+    - name: Deploy to Production
+      run: |
+        # Deploy all services to production
+        for service in frontend accounts/contacts accounts/userservice ledger/balancereader ledger/ledgerwriter ledger/transactionhistory accounts/accounts-db ledger/ledger-db loadgenerator investment-manager-svc invest-svc portfolio-reader-svc user-portfolio-db withdraw-svc user-request-queue-svc market-reader-svc execute-order-svc consistency-manager-svc user-tier-agent assets-db queue-db; do
+          echo "Deploying $service to production..."
+          cd src/$service
+          skaffold run --default-repo=$REGION-docker.pkg.dev/$PROJECT_ID/bank-of-anthos --tag=$GITHUB_SHA --profile=production
+          cd ../..
+        done

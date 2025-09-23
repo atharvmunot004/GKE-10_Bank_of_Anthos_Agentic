@@ -1,0 +1,204 @@
+# Local development setup for Bank of Anthos
+# This allows you to run all services locally for development
+
+version: '3.8'
+
+services:
+  # Databases
+  accounts-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: accounts-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - accounts_db_data:/var/lib/postgresql/data
+
+  ledger-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: postgresdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - ledger_db_data:/var/lib/postgresql/data
+
+  assets-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: assets-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - assets_db_data:/var/lib/postgresql/data
+
+  queue-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: queue-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - queue_db_data:/var/lib/postgresql/data
+
+  user-portfolio-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: user-portfolio-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - user_portfolio_db_data:/var/lib/postgresql/data
+
+  # Application Services
+  frontend:
+    build: ./src/frontend
+    ports:
+      - "8080:8080"
+    environment:
+      - ACCOUNTS_DB_URI=postgresql://postgres:postgres@accounts-db:5432/accounts-db
+      - LEDGER_DB_URI=postgresql://postgres:postgres@ledger-db:5432/postgresdb
+    depends_on:
+      - accounts-db
+      - ledger-db
+
+  userservice:
+    build: ./src/accounts/userservice
+    ports:
+      - "8081:8080"
+    environment:
+      - ACCOUNTS_DB_URI=postgresql://postgres:postgres@accounts-db:5432/accounts-db
+    depends_on:
+      - accounts-db
+
+  contacts:
+    build: ./src/accounts/contacts
+    ports:
+      - "8082:8080"
+    environment:
+      - ACCOUNTS_DB_URI=postgresql://postgres:postgres@accounts-db:5432/accounts-db
+    depends_on:
+      - accounts-db
+
+  ledgerwriter:
+    build: ./src/ledger/ledgerwriter
+    ports:
+      - "8083:8080"
+    environment:
+      - LEDGER_DB_URI=postgresql://postgres:postgres@ledger-db:5432/postgresdb
+    depends_on:
+      - ledger-db
+
+  balancereader:
+    build: ./src/ledger/balancereader
+    ports:
+      - "8084:8080"
+    environment:
+      - LEDGER_DB_URI=postgresql://postgres:postgres@ledger-db:5432/postgresdb
+    depends_on:
+      - ledger-db
+
+  transactionhistory:
+    build: ./src/ledger/transactionhistory
+    ports:
+      - "8085:8080"
+    environment:
+      - LEDGER_DB_URI=postgresql://postgres:postgres@ledger-db:5432/postgresdb
+    depends_on:
+      - ledger-db
+
+  # Investment Services
+  investment-manager-svc:
+    build: ./src/investment-manager-svc
+    ports:
+      - "8086:8080"
+    environment:
+      - USER_PORTFOLIO_DB_URI=postgresql://postgres:postgres@user-portfolio-db:5432/user-portfolio-db
+      - INVEST_SVC_URL=http://invest-svc:8080
+      - PORTFOLIO_READER_SVC_URL=http://portfolio-reader-svc:8080
+    depends_on:
+      - user-portfolio-db
+
+  invest-svc:
+    build: ./src/invest-svc
+    ports:
+      - "8087:8080"
+    environment:
+      - USER_PORTFOLIO_DB_URI=postgresql://postgres:postgres@user-portfolio-db:5432/user-portfolio-db
+      - USER_TIER_AGENT_URL=http://user-tier-agent:8080
+      - LEDGERWRITER_URL=http://ledgerwriter:8080
+    depends_on:
+      - user-portfolio-db
+
+  portfolio-reader-svc:
+    build: ./src/portfolio-reader-svc
+    ports:
+      - "8088:8080"
+    environment:
+      - USER_PORTFOLIO_DB_URI=postgresql://postgres:postgres@user-portfolio-db:5432/user-portfolio-db
+    depends_on:
+      - user-portfolio-db
+
+  withdraw-svc:
+    build: ./src/withdraw-svc
+    ports:
+      - "8089:8080"
+    environment:
+      - USER_PORTFOLIO_DB_URI=postgresql://postgres:postgres@user-portfolio-db:5432/user-portfolio-db
+      - USER_TIER_AGENT_URL=http://user-tier-agent:8080
+      - LEDGERWRITER_URL=http://ledgerwriter:8080
+    depends_on:
+      - user-portfolio-db
+
+  # AI Services
+  user-tier-agent:
+    build: ./src/user-tier-agent
+    ports:
+      - "8090:8080"
+    environment:
+      - LEDGER_DB_URI=postgresql://postgres:postgres@ledger-db:5432/postgresdb
+      - GEMINI_API_KEY=""
+    depends_on:
+      - ledger-db
+
+  # Queue and Orchestration Services
+  user-request-queue-svc:
+    build: ./src/user-request-queue-svc
+    ports:
+      - "8091:8080"
+    environment:
+      - QUEUE_DB_URI=postgresql://postgres:postgres@queue-db:5432/queue-db
+    depends_on:
+      - queue-db
+
+  consistency-manager-svc:
+    build: ./src/consistency-manager-svc
+    ports:
+      - "8092:8080"
+    environment:
+      - QUEUE_DB_URI=postgresql://postgres:postgres@queue-db:5432/queue-db
+      - USER_PORTFOLIO_DB_URI=postgresql://postgres:postgres@user-portfolio-db:5432/user-portfolio-db
+    depends_on:
+      - queue-db
+      - user-portfolio-db
+
+volumes:
+  accounts_db_data:
+  ledger_db_data:
+  assets_db_data:
+  queue_db_data:
+  user_portfolio_db_data:
+
+networks:
+  default:
+    name: bank-of-anthos-network

@@ -1,0 +1,69 @@
+name: Simple Bank of Anthos Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ffd-gke10
+  REGION: us-central1
+  CLUSTER_NAME: bank-of-anthos
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      
+    - name: Configure Docker
+      run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      
+    - name: Get GKE Credentials
+      run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=${{ env.REGION }}
+      
+    - name: Build and Push Images
+      run: |
+        # Build and push key services
+        services=("frontend" "investment-manager-svc" "invest-svc" "user-tier-agent")
+        
+        for service in "${services[@]}"; do
+          if [ -d "src/$service" ]; then
+            echo "Building $service..."
+            cd "src/$service"
+            docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/bank-of-anthos/$service:$GITHUB_SHA .
+            docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/bank-of-anthos/$service:$GITHUB_SHA
+            docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/bank-of-anthos/$service:$GITHUB_SHA ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/bank-of-anthos/$service:latest
+            docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/bank-of-anthos/$service:latest
+            cd ../..
+          fi
+        done
+
+    - name: Deploy to GKE
+      run: |
+        # Deploy services to your existing cluster
+        kubectl apply -f kubernetes-manifests/
+        
+        # Wait for deployments to be ready
+        kubectl rollout status deployment/frontend --timeout=300s
+        kubectl rollout status deployment/investment-manager-svc --timeout=300s || echo "investment-manager-svc not found, skipping"
+        
+    - name: Verify Deployment
+      run: |
+        kubectl get pods
+        kubectl get services

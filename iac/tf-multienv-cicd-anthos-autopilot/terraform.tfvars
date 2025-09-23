@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-project_id = "bank-of-anthos-ci"
+project_id = "ffd-gke10"  # Replace with your actual GCP project ID
 region     = "us-central1"
 zone       = "us-central1-b"
 
-repo_owner  = "GoogleCloudPlatform"
-sync_repo   = "bank-of-anthos"
+repo_owner  = "atharvmunot004"  # Replace with your GitHub username
+sync_repo   = "GKE-10_Bank_of_Anthos_Agentic"               # Replace with your repository name
 sync_branch = "main"

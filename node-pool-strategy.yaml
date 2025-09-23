@@ -1,0 +1,91 @@
+# Multi-Node Pool Strategy for Bank of Anthos
+
+# 1. General Purpose Pool (for most services)
+apiVersion: v1
+kind: NodePool
+metadata:
+  name: general-purpose-pool
+spec:
+  machineType: e2-standard-2
+  diskSizeGb: 100
+  diskType: pd-standard
+  nodeCount: 3
+  minNodeCount: 2
+  maxNodeCount: 10
+  labels:
+    workload-type: general
+    tier: standard
+
+---
+# 2. High Performance Pool (for AI/ML services)
+apiVersion: v1
+kind: NodePool
+metadata:
+  name: high-performance-pool
+spec:
+  machineType: e2-standard-4
+  diskSizeGb: 200
+  diskType: pd-ssd
+  nodeCount: 2
+  minNodeCount: 1
+  maxNodeCount: 5
+  labels:
+    workload-type: ai-ml
+    tier: premium
+
+---
+# 3. Database Pool (for stateful services)
+apiVersion: v1
+kind: NodePool
+metadata:
+  name: database-pool
+spec:
+  machineType: e2-standard-2
+  diskSizeGb: 500
+  diskType: pd-ssd
+  nodeCount: 2
+  minNodeCount: 1
+  maxNodeCount: 3
+  labels:
+    workload-type: database
+    tier: persistent
+
+---
+# Node Affinity Examples for Services
+
+# AI Services should use high-performance nodes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-tier-agent
+spec:
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: workload-type
+                operator: In
+                values:
+                - ai-ml
+
+---
+# Database services should use database nodes
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: accounts-db
+spec:
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: workload-type
+                operator: In
+                values:
+                - database

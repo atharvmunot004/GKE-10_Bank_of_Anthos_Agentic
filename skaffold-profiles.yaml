@@ -1,0 +1,156 @@
+# Skaffold profiles for different environments
+
+# Staging profile
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: bank-of-anthos-staging
+profiles:
+- name: staging
+  build:
+    artifacts:
+    - image: frontend
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/contacts
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/userservice
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/balancereader
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/ledgerwriter
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/transactionhistory
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/accounts-db
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/ledger-db
+      docker:
+        dockerfile: Dockerfile
+    - image: loadgenerator
+      docker:
+        dockerfile: Dockerfile
+    - image: investment-manager-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: invest-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: portfolio-reader-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-portfolio-db
+      docker:
+        dockerfile: Dockerfile
+    - image: withdraw-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-request-queue-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: market-reader-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: execute-order-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: consistency-manager-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-tier-agent
+      docker:
+        dockerfile: Dockerfile
+    - image: assets-db
+      docker:
+        dockerfile: Dockerfile
+    - image: queue-db
+      docker:
+        dockerfile: Dockerfile
+  deploy:
+    kubectl:
+      manifests:
+        k8s/overlays/staging/kustomization.yaml
+
+---
+# Production profile
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: bank-of-anthos-production
+profiles:
+- name: production
+  build:
+    artifacts:
+    - image: frontend
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/contacts
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/userservice
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/balancereader
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/ledgerwriter
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/transactionhistory
+      docker:
+        dockerfile: Dockerfile
+    - image: accounts/accounts-db
+      docker:
+        dockerfile: Dockerfile
+    - image: ledger/ledger-db
+      docker:
+        dockerfile: Dockerfile
+    - image: loadgenerator
+      docker:
+        dockerfile: Dockerfile
+    - image: investment-manager-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: invest-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: portfolio-reader-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-portfolio-db
+      docker:
+        dockerfile: Dockerfile
+    - image: withdraw-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-request-queue-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: market-reader-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: execute-order-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: consistency-manager-svc
+      docker:
+        dockerfile: Dockerfile
+    - image: user-tier-agent
+      docker:
+        dockerfile: Dockerfile
+    - image: assets-db
+      docker:
+        dockerfile: Dockerfile
+    - image: queue-db
+      docker:
+        dockerfile: Dockerfile
+  deploy:
+    kubectl:
+      manifests:
+        k8s/overlays/production/kustomization.yaml
