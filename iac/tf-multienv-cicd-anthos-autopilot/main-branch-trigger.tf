@@ -127,6 +127,8 @@ resource "google_clouddeploy_release" "main_release" {
   delivery_pipeline = google_clouddeploy_delivery_pipeline.main_pipeline.name
   location         = var.region
   project          = var.project_id
+  
+  provider = google-beta
 
   skaffold_config {
     uri      = local.sync_repo_url

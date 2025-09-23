@@ -59,6 +59,8 @@ resource "google_clouddeploy_target" "staging" {
       "DEPLOY"
     ]
   }
+  
+  provider = google-beta
 }
 
 resource "google_clouddeploy_target" "production" {
@@ -81,6 +83,8 @@ resource "google_clouddeploy_target" "production" {
       "VERIFY"
     ]
   }
+  
+  provider = google-beta
 }
 
 
