@@ -37,11 +37,11 @@ module "gke" {
     {
       name         = "asd-node-pool"
       autoscaling  = true
-      node_count   = 3
-      min_count    = 1
-      max_count    = 10
+      node_count   = 5                    # Increased from 3 to 5
+      min_count    = 2                    # Increased from 1 to 2
+      max_count    = 20                   # Increased from 10 to 20
       auto_upgrade = true
-      machine_type = "e2-standard-2"
+      machine_type = "e2-standard-4"      # Upgraded from e2-standard-2 to e2-standard-4
     },
   ]
 
