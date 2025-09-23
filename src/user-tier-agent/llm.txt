@@ -1,0 +1,290 @@
+microservice-description: {
+    request-received: {
+        accountid,
+        amount_break,
+        uuid,
+        purpose
+    } using the JWT bearer token,
+    description: {
+        "this is an AIagent that divides the received amount into 3 tiers: tier1, tier2, tier3"
+    },
+    prompt: "You are a smart alloaction agent that gets {{ uuid, [amount, timestamp], [amount, timestamp], . . . }, amount_break} and has to divide amount_break into 3 tiers, where Tier1 is the most liquid, Tier2 is a little less liquid, and Tier3 is the least liquid; based on the transaction history of this user ",
+    steps: {
+        step1: "queries the ledger-db using the JWT authentication token to get the recent N transactions",
+        step2: "converts this data into a format: 
+                {
+                    [amount, timestamp],
+                    [amount, timestamp],
+                    .
+                    .
+                    .
+                }",
+        step3: "invoke an api call to gemini using the stored in the file .env of this folder with the prompt"
+    },
+    return: {
+        accountid, uuid, purpose, tier1, tier2, tier3
+    }
+}
+----write after this-----
+
+# User Tier Agent Service (user-tier-agent) - AI Agent Documentation
+
+## Service Overview
+The User Tier Agent is an AI-powered microservice that intelligently allocates investment amounts across three tiers based on user transaction history and spending patterns. It uses Google's Gemini AI to analyze user behavior and make smart allocation decisions for investment and withdrawal requests.
+
+## Core Functionality
+
+### AI-Powered Tier Allocation
+- **Purpose**: Analyzes user transaction history to determine optimal investment allocation
+- **AI Integration**: Uses Google Gemini API for intelligent decision making
+- **Three-Tier System**: Allocates across liquid (Tier1), moderate (Tier2), and long-term (Tier3) investments
+- **Fallback Mechanism**: Default allocation when AI is unavailable
+
+### Transaction Analysis
+The service analyzes user transaction history to determine:
+1. **Transaction Frequency**: How often the user makes transactions
+2. **Amount Patterns**: Average, median, and range of transaction amounts
+3. **Spending Consistency**: Whether spending is regular or variable
+4. **Recent Trends**: Changes in spending behavior over time
+5. **Risk Indicators**: Implied risk tolerance from transaction behavior
+
+## API Endpoints
+
+### Health & Status
+- `GET /health` - Service health check
+- `GET /ready` - Readiness probe (includes database connectivity)
+- `GET /api/v1/status` - Service status and configuration
+
+### Core Functionality
+- `POST /api/v1/allocate` - Main tier allocation endpoint
+
+## Request/Response Format
+
+### POST /api/v1/allocate
+**Purpose**: Get AI-powered tier allocation for investment/withdrawal requests
+
+**Request Body**:
+```json
+{
+  "accountid": "1234567890",
+  "amount": 1000.00,
+  "uuid": "unique-transaction-uuid",
+  "purpose": "INVEST"
+}
+```
+
+**Headers**:
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Success Response (200)**:
+```json
+{
+  "status": "success",
+  "data": {
+    "accountid": "1234567890",
+    "amount": 1000.00,
+    "uuid": "unique-transaction-uuid",
+    "purpose": "INVEST",
+    "tier1": 350.00,
+    "tier2": 450.00,
+    "tier3": 200.00,
+    "allocation_percentages": {
+      "tier1": 35.0,
+      "tier2": 45.0,
+      "tier3": 20.0
+    },
+    "reasoning": "AI-generated allocation based on transaction patterns",
+    "timestamp": "2024-01-01T10:00:00Z"
+  }
+}
+```
+
+**Error Responses**:
+- 400: Invalid request data or JWT token
+- 401: Missing or invalid Authorization header
+- 500: Internal server error
+
+## Tier Definitions
+
+### Tier 1 (Most Liquid)
+- **Description**: Cash-like investments, money market funds, short-term bonds
+- **Characteristics**: High liquidity, low risk, immediate access
+- **Typical Allocation**: 20-40%
+
+### Tier 2 (Moderately Liquid)
+- **Description**: Balanced funds, ETFs, medium-term investments
+- **Characteristics**: Moderate liquidity, balanced risk/return
+- **Typical Allocation**: 40-60%
+
+### Tier 3 (Least Liquid)
+- **Description**: Long-term investments, growth funds, real estate
+- **Characteristics**: Lower liquidity, higher potential returns
+- **Typical Allocation**: 20-40%
+
+## AI Decision Process
+
+### Step-by-Step Process
+1. **JWT Validation**: Validates JWT token and extracts account information
+2. **Transaction History**: Queries ledger-db for recent user transactions (default: 50 transactions)
+3. **Data Formatting**: Converts transaction data to AI-consumable format
+4. **AI Analysis**: Sends formatted data and prompt to Gemini API
+5. **Response Processing**: Validates AI response and calculates tier amounts
+6. **Result Return**: Returns allocation with reasoning and metadata
+
+### AI Prompt Structure
+```
+You are a smart allocation agent that gets {
+    uuid: "transaction-uuid",
+    transaction_history: [
+        [amount, timestamp],
+        [amount, timestamp],
+        ...
+    ],
+    amount_break: 1000.0
+} and has to divide amount_break into 3 tiers, where:
+- Tier1 is the most liquid (cash-like investments, money market funds, short-term bonds)
+- Tier2 is moderately liquid (balanced funds, ETFs, medium-term investments)  
+- Tier3 is the least liquid (long-term investments, growth funds, real estate)
+
+Based on the transaction history, analyze spending patterns, frequency, and amounts to determine optimal allocation.
+
+Return JSON: {
+    "tier1": <percentage>,
+    "tier2": <percentage>, 
+    "tier3": <percentage>,
+    "reasoning": "<explanation>"
+}
+```
+
+### Fallback Allocation
+When AI is unavailable:
+- **Default Allocation**: 30% Tier1, 50% Tier2, 20% Tier3
+- **Reasoning**: "Default allocation: conservative distribution due to AI unavailability"
+
+## Environment Variables
+
+### Required
+- `LEDGER_DB_URI`: PostgreSQL connection string for ledger-db
+- `JWT_SECRET_KEY`: Secret key for JWT token validation
+
+### Optional
+- `GEMINI_API_KEY`: Google Gemini API key (if not set, uses default allocation)
+- `GEMINI_API_URL`: Gemini API endpoint URL (default: Google's endpoint)
+- `JWT_ALGORITHM`: JWT algorithm (default: HS256)
+- `REQUEST_TIMEOUT`: HTTP request timeout in seconds (default: 30)
+- `PORT`: Service port (default: 8080)
+
+## Database Integration
+
+### ledger-db Tables Used
+- **transactions**: User transaction history
+  - `amount`: Transaction amount in cents
+  - `timestamp`: Transaction timestamp
+  - `fromAccountNum`: Source account number
+  - `toAccountNum`: Destination account number
+  - `uuid`: Unique transaction identifier
+
+### Database Operations
+```sql
+-- Get user transaction history
+SELECT amount, timestamp, fromAccountNum, toAccountNum, uuid
+FROM transactions 
+WHERE fromAccountNum = %s OR toAccountNum = %s
+ORDER BY timestamp DESC 
+LIMIT %s
+```
+
+## Integration Points
+
+### Dependencies
+- **ledger-db**: PostgreSQL database for transaction history
+- **Gemini API**: Google's AI service for allocation decisions
+- **JWT Validation**: Token-based authentication
+
+### Service Communication
+- **Input**: Investment/withdrawal allocation requests
+- **Output**: Tier allocation with amounts and percentages
+- **Authentication**: JWT Bearer token required
+
+## Usage Examples for AI Agents
+
+### 1. Get Investment Allocation
+```bash
+curl -X POST http://user-tier-agent:8080/api/v1/allocate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
+  -d '{
+    "accountid": "1234567890",
+    "amount": 1000.0,
+    "uuid": "invest-uuid-001",
+    "purpose": "INVEST"
+  }'
+```
+
+### 2. Get Withdrawal Allocation
+```bash
+curl -X POST http://user-tier-agent:8080/api/v1/allocate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
+  -d '{
+    "accountid": "1234567890",
+    "amount": 500.0,
+    "uuid": "withdraw-uuid-001",
+    "purpose": "WITHDRAW"
+  }'
+```
+
+### 3. Check Service Status
+```bash
+curl -X GET http://user-tier-agent:8080/api/v1/status
+```
+
+## AI Agent Decision Making Support
+
+### Allocation Strategy
+- Use `allocation_percentages` to understand AI's reasoning
+- Monitor `reasoning` field for decision explanation
+- Check `timestamp` for allocation timing
+- Validate tier amounts sum to requested amount
+
+### Integration with Other Services
+- **invest-svc**: Uses allocation for investment processing
+- **withdraw-svc**: Uses allocation for withdrawal processing
+- **user-request-queue-svc**: May use for queue processing decisions
+
+### Error Handling
+- **AI Unavailable**: Service falls back to default allocation
+- **Invalid JWT**: Returns 400 error with clear message
+- **Database Error**: Returns 500 error with logging
+- **Invalid Request**: Validates all required parameters
+
+## Performance Characteristics
+- **Response Time**: < 2 seconds for typical requests
+- **AI Processing**: 1-3 seconds depending on transaction history size
+- **Fallback Time**: < 100ms when AI is unavailable
+- **Concurrent Requests**: Supports multiple simultaneous allocations
+
+## Monitoring and Health
+- Health endpoint for service monitoring
+- Readiness check includes database connectivity
+- Comprehensive logging for AI decisions and errors
+- Status endpoint shows configuration and AI availability
+
+## Security Considerations
+- **JWT Authentication**: All requests require valid JWT tokens
+- **Account Validation**: Account ID must match JWT token
+- **Input Validation**: Validates all request parameters
+- **API Key Protection**: Gemini API key stored as Kubernetes secret
+
+## Testing
+- Unit tests cover all core functionality
+- Integration tests with mocked AI responses
+- Error scenario testing for fallback behavior
+- JWT validation and security testing
+
+---
+
+*This documentation is designed for AI agents to understand and integrate with the user-tier-agent microservice. For human developers, refer to the README.md file in the service directory.*

@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-tier-agent
+  labels:
+    app: user-tier-agent
+    tier: ai-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-tier-agent
+  template:
+    metadata:
+      labels:
+        app: user-tier-agent
+        tier: ai-agent
+    spec:
+      containers:
+      - name: user-tier-agent
+        image: user-tier-agent:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: LEDGER_DB_URI
+          value: "postgresql://postgres:postgres@ledger-db:5432/postgresdb"
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gemini-api-key
+              key: api-key
+        - name: GEMINI_API_URL
+          value: "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jwt-secret
+              key: secret
+        - name: JWT_ALGORITHM
+          value: "HS256"
+        - name: REQUEST_TIMEOUT
+          value: "30"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-tier-agent
+  labels:
+    app: user-tier-agent
+    tier: ai-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: user-tier-agent

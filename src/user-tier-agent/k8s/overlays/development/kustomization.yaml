@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: development
+
+resources:
+- ../../base
+- user-tier-agent.yaml
+
+patchesStrategicMerge:
+- user-tier-agent.yaml
+
+namePrefix: dev-
