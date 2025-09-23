@@ -121,22 +121,5 @@ resource "google_clouddeploy_delivery_pipeline" "main_pipeline" {
   provider = google-beta
 }
 
-# Cloud Deploy release for main branch
-resource "google_clouddeploy_release" "main_release" {
-  name             = "main-release-${formatdate("YYYYMMDD-HHMMSS", timestamp())}"
-  delivery_pipeline = google_clouddeploy_delivery_pipeline.main_pipeline.name
-  location         = var.region
-  project          = var.project_id
-  
-  provider = google-beta
-
-  skaffold_config {
-    uri      = local.sync_repo_url
-    path     = "skaffold.yaml"
-    version  = "latest"
-  }
-
-  depends_on = [
-    google_clouddeploy_delivery_pipeline.main_pipeline
-  ]
-}
+# Note: google_clouddeploy_release is not supported in current provider version
+# Releases will be created manually via Cloud Deploy console or gcloud CLI
