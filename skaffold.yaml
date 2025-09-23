@@ -70,5 +70,8 @@ requires:
 - configs:
   - consistency-manager-svc
   path: src/consistency-manager-svc/skaffold.yaml
+- configs:
+  - user-tier-agent
+  path: src/user-tier-agent/skaffold.yaml
 deploy:
   tolerateFailuresUntilDeadline: true

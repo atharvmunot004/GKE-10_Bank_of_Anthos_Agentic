@@ -1,0 +1,21 @@
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: user-tier-agent
+build:
+  artifacts:
+  - image: user-tier-agent
+    docker:
+      dockerfile: Dockerfile
+  local:
+    push: false
+deploy:
+  kubectl:
+    manifests:
+      k8s/base/kustomization.yaml
+profiles:
+- name: development
+  deploy:
+    kubectl:
+      manifests:
+        k8s/overlays/development/kustomization.yaml

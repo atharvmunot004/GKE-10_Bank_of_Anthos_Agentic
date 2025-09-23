@@ -1,0 +1,422 @@
+{
+  "architecture": {
+    "description": "Bank of Anthos Investment Platform - Microservices Architecture Adjacency Graph",
+    "version": "1.0",
+    "last_updated": "2024-01-01T10:00:00Z",
+    "total_services": 25,
+    "total_databases": 5
+  },
+  "services": {
+    "loadgen": {
+      "type": "testing",
+      "port": 8080,
+      "calls": ["frontend"],
+      "description": "Load generator for performance testing"
+    },
+    "frontend": {
+      "type": "web",
+      "port": 8080,
+      "calls": [
+        "userservice",
+        "contacts",
+        "ledgerwriter",
+        "balancereader",
+        "transactionhistory",
+        "investment-manager-svc"
+      ],
+      "description": "Main web interface and API gateway"
+    },
+    "userservice": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["accounts-db"],
+      "description": "User authentication and JWT token management"
+    },
+    "contacts": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["accounts-db"],
+      "description": "Contact management service"
+    },
+    "ledgerwriter": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["ledger-db"],
+      "description": "Writes transaction records to ledger database"
+    },
+    "balancereader": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["ledger-db", "user-tier-agent"],
+      "description": "Reads account balances from ledger and gets user tier classification"
+    },
+    "transactionhistory": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["ledger-db", "user-tier-agent"],
+      "description": "Provides transaction history with user tier context"
+    },
+    "investment-manager-svc": {
+      "type": "orchestration",
+      "port": 8080,
+      "calls": [
+        "portfolio-reader-svc",
+        "invest-svc",
+        "withdraw-svc",
+        "ledgerwriter"
+      ],
+      "description": "Central orchestration service for investment operations"
+    },
+    "portfolio-reader-svc": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["user-portfolio-db"],
+      "description": "Read-only service for portfolio data retrieval"
+    },
+    "invest-svc": {
+      "type": "application",
+      "port": 8080,
+      "calls": [
+        "user-portfolio-db",
+        "user-tier-agent",
+        "balancereader"
+      ],
+      "description": "Processes investment requests and updates portfolios"
+    },
+    "withdraw-svc": {
+      "type": "application",
+      "port": 8080,
+      "calls": [
+        "user-portfolio-db",
+        "user-tier-agent"
+      ],
+      "description": "Processes withdrawal requests from portfolios"
+    },
+    "user-tier-agent": {
+      "type": "ai-agent",
+      "port": 8080,
+      "calls": ["user-request-queue-svc"],
+      "description": "AI agent for user tier classification and fund allocation"
+    },
+    "user-request-queue-svc": {
+      "type": "processing",
+      "port": 8080,
+      "calls": [
+        "queue-db",
+        "bank-asset-agent"
+      ],
+      "description": "Batch processes investment/withdrawal requests in queues"
+    },
+    "bank-asset-agent": {
+      "type": "ai-agent",
+      "port": 8080,
+      "calls": [
+        "market-reader-svc",
+        "execute-order-svc",
+        "assets-db"
+      ],
+      "description": "AI agent for asset management and trading decisions"
+    },
+    "market-reader-svc": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["assets-db"],
+      "description": "Provides real-time market data simulation and analytics"
+    },
+    "execute-order-svc": {
+      "type": "application",
+      "port": 8080,
+      "calls": ["assets-db"],
+      "description": "Executes buy/sell orders for assets"
+    },
+    "consistency-manager-svc": {
+      "type": "background",
+      "port": 8080,
+      "calls": [
+        "queue-db",
+        "user-portfolio-db"
+      ],
+      "description": "Maintains consistency between queue-db and user-portfolio-db"
+    },
+    "accounts-db": {
+      "type": "database",
+      "port": 5432,
+      "calls": [],
+      "description": "PostgreSQL database for user accounts and contacts"
+    },
+    "ledger-db": {
+      "type": "database",
+      "port": 5432,
+      "calls": [],
+      "description": "PostgreSQL database for transaction ledger (append-only)"
+    },
+    "user-portfolio-db": {
+      "type": "database",
+      "port": 5432,
+      "calls": [],
+      "description": "PostgreSQL database for user portfolios and transactions"
+    },
+    "queue-db": {
+      "type": "database",
+      "port": 5432,
+      "calls": [],
+      "description": "PostgreSQL database for investment/withdrawal request queues"
+    },
+    "assets-db": {
+      "type": "database",
+      "port": 5432,
+      "calls": [],
+      "description": "PostgreSQL database for asset information and prices"
+    }
+  },
+  "communication_flows": {
+    "user_investment_flow": {
+      "description": "Complete flow from user investment request to portfolio update",
+      "steps": [
+        "frontend → investment-manager-svc",
+        "investment-manager-svc → portfolio-reader-svc → user-portfolio-db",
+        "investment-manager-svc → invest-svc",
+        "invest-svc → balancereader → ledger-db",
+        "invest-svc → user-tier-agent",
+        "invest-svc → user-portfolio-db",
+        "investment-manager-svc → ledgerwriter → ledger-db"
+      ]
+    },
+    "user_withdrawal_flow": {
+      "description": "Complete flow from user withdrawal request to portfolio update",
+      "steps": [
+        "frontend → investment-manager-svc",
+        "investment-manager-svc → portfolio-reader-svc → user-portfolio-db",
+        "investment-manager-svc → withdraw-svc",
+        "withdraw-svc → user-portfolio-db",
+        "withdraw-svc → user-tier-agent",
+        "investment-manager-svc → ledgerwriter → ledger-db"
+      ]
+    },
+    "queue_processing_flow": {
+      "description": "Background processing of investment/withdrawal requests",
+      "steps": [
+        "invest-svc → user-request-queue-svc → queue-db",
+        "withdraw-svc → user-request-queue-svc → queue-db",
+        "user-request-queue-svc → bank-asset-agent",
+        "bank-asset-agent → market-reader-svc → assets-db",
+        "bank-asset-agent → execute-order-svc → assets-db",
+        "consistency-manager-svc → queue-db",
+        "consistency-manager-svc → user-portfolio-db"
+      ]
+    },
+    "market_data_flow": {
+      "description": "Real-time market data processing and asset management",
+      "steps": [
+        "market-reader-svc → assets-db",
+        "execute-order-svc → assets-db",
+        "bank-asset-agent → market-reader-svc",
+        "bank-asset-agent → execute-order-svc"
+      ]
+    },
+    "authentication_flow": {
+      "description": "User authentication and authorization",
+      "steps": [
+        "frontend → userservice → accounts-db",
+        "frontend → contacts → accounts-db"
+      ]
+    },
+    "balance_inquiry_flow": {
+      "description": "Account balance retrieval and tier classification",
+      "steps": [
+        "frontend → balancereader → ledger-db",
+        "balancereader → user-tier-agent",
+        "frontend → transactionhistory → ledger-db",
+        "transactionhistory → user-tier-agent"
+      ]
+    }
+  },
+  "data_flow_patterns": {
+    "read_heavy_services": [
+      "portfolio-reader-svc",
+      "balancereader",
+      "transactionhistory",
+      "market-reader-svc"
+    ],
+    "write_heavy_services": [
+      "ledgerwriter",
+      "invest-svc",
+      "withdraw-svc",
+      "execute-order-svc"
+    ],
+    "background_services": [
+      "user-request-queue-svc",
+      "consistency-manager-svc",
+      "market-reader-svc"
+    ],
+    "ai_agents": [
+      "user-tier-agent",
+      "bank-asset-agent"
+    ],
+    "orchestration_services": [
+      "investment-manager-svc",
+      "frontend"
+    ]
+  },
+  "database_relationships": {
+    "accounts-db": {
+      "tables": ["users", "contacts"],
+      "accessed_by": ["userservice", "contacts"],
+      "purpose": "User account management and authentication"
+    },
+    "ledger-db": {
+      "tables": ["transactions"],
+      "accessed_by": ["ledgerwriter", "balancereader", "transactionhistory"],
+      "purpose": "Immutable transaction records and audit trail"
+    },
+    "user-portfolio-db": {
+      "tables": ["user_portfolios", "portfolio_transactions"],
+      "accessed_by": [
+        "portfolio-reader-svc",
+        "invest-svc",
+        "withdraw-svc",
+        "consistency-manager-svc"
+      ],
+      "purpose": "User portfolio data and investment transaction history"
+    },
+    "queue-db": {
+      "tables": ["investment_queue", "withdrawal_queue"],
+      "accessed_by": [
+        "user-request-queue-svc",
+        "consistency-manager-svc"
+      ],
+      "purpose": "Investment and withdrawal request queuing"
+    },
+    "assets-db": {
+      "tables": ["assets"],
+      "accessed_by": [
+        "market-reader-svc",
+        "execute-order-svc",
+        "bank-asset-agent"
+      ],
+      "purpose": "Asset information, prices, and inventory management"
+    }
+  },
+  "environment_variables": {
+    "tier_pools": {
+      "TIER1": "Tier 1 pool value (default: 1000000.0)",
+      "TIER2": "Tier 2 pool value (default: 2000000.0)",
+      "TIER3": "Tier 3 pool value (default: 500000.0)"
+    },
+    "tier_market_values": {
+      "TIER1_MV": "Tier 1 market value (calculated)",
+      "TIER2_MV": "Tier 2 market value (calculated)",
+      "TIER3_MV": "Tier 3 market value (calculated)"
+    },
+    "database_uris": {
+      "ACCOUNTS_DB_URI": "PostgreSQL connection for accounts-db",
+      "LEDGER_DB_URI": "PostgreSQL connection for ledger-db",
+      "USER_PORTFOLIO_DB_URI": "PostgreSQL connection for user-portfolio-db",
+      "QUEUE_DB_URI": "PostgreSQL connection for queue-db",
+      "ASSETS_DB_URI": "PostgreSQL connection for assets-db"
+    }
+  },
+  "api_endpoints": {
+    "frontend": [
+      "GET /",
+      "GET /home",
+      "GET /login",
+      "POST /login",
+      "GET /logout",
+      "GET /portfolio",
+      "POST /invest",
+      "POST /withdraw"
+    ],
+    "investment-manager-svc": [
+      "GET /health",
+      "GET /ready",
+      "GET /api/v1/status",
+      "GET /api/v1/portfolio/{account_id}",
+      "GET /api/v1/portfolio/{account_id}/transactions",
+      "POST /api/v1/invest",
+      "POST /api/v1/withdraw"
+    ],
+    "invest-svc": [
+      "GET /health",
+      "GET /ready",
+      "POST /api/v1/invest",
+      "GET /api/v1/portfolio/{user_id}",
+      "GET /api/v1/portfolio/{user_id}/transactions"
+    ],
+    "withdraw-svc": [
+      "GET /health",
+      "GET /ready",
+      "POST /api/v1/withdraw"
+    ],
+    "portfolio-reader-svc": [
+      "GET /health",
+      "GET /ready",
+      "GET /api/v1/portfolio/{user_id}",
+      "GET /api/v1/portfolio/{user_id}/transactions",
+      "GET /api/v1/portfolio/{user_id}/summary"
+    ],
+    "user-request-queue-svc": [
+      "GET /health",
+      "GET /ready",
+      "POST /api/v1/queue",
+      "GET /api/v1/queue/{uuid}",
+      "GET /api/v1/queue/stats",
+      "GET /api/v1/tier-values"
+    ],
+    "market-reader-svc": [
+      "GET /health",
+      "GET /ready",
+      "POST /api/v1/market-data",
+      "GET /api/v1/market-summary"
+    ],
+    "execute-order-svc": [
+      "GET /health",
+      "GET /ready",
+      "POST /api/v1/execute-order",
+      "GET /api/v1/tier-status"
+    ],
+    "consistency-manager-svc": [
+      "GET /health",
+      "GET /ready",
+      "GET /api/v1/consistency/status",
+      "POST /api/v1/consistency/trigger",
+      "POST /api/v1/consistency/update-tier-values"
+    ]
+  },
+  "deployment_info": {
+    "container_platform": "Kubernetes",
+    "orchestration": "Skaffold",
+    "ci_cd": "Google Cloud Build",
+    "monitoring": "Kubernetes health checks",
+    "networking": "ClusterIP services",
+    "persistence": "PostgreSQL StatefulSets"
+  },
+  "security": {
+    "authentication": "JWT tokens",
+    "service_mesh": "Internal cluster networking",
+    "database_security": "Network-level access control",
+    "api_security": "Input validation and sanitization"
+  },
+  "scalability": {
+    "stateless_services": [
+      "frontend",
+      "investment-manager-svc",
+      "portfolio-reader-svc",
+      "invest-svc",
+      "withdraw-svc",
+      "market-reader-svc",
+      "execute-order-svc"
+    ],
+    "stateful_services": [
+      "accounts-db",
+      "ledger-db",
+      "user-portfolio-db",
+      "queue-db",
+      "assets-db"
+    ],
+    "background_services": [
+      "user-request-queue-svc",
+      "consistency-manager-svc"
+    ]
+  }
+}

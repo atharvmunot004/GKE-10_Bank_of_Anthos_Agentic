@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-tier-agent
+spec:
+  template:
+    spec:
+      containers:
+      - name: user-tier-agent
+        env:
+        - name: GEMINI_API_KEY
+          value: ""  # Empty for development - will use default allocation
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
