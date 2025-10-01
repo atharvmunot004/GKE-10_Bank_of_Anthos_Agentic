@@ -1,0 +1,39 @@
+Microservice description:
+- Polls from queue-db for batches of 10 transactions to further preprocess them and then forward to bank-asset-agent.
+
+Ordered flow of execution:
+user-request-queue-svc
+    |
+    | (input: {uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST'})
+    |
+    |----> polls from queue-db for a batch of 10 portfolio transactions
+    |      using the DB Credentials for the queue-db microservice access the database
+    |      keep track of number of entries in the queue-db
+    |      as soon as 10 entries are present get those entries and keep track of them using uuid
+    |
+    |----> collect in the form of a list of 10
+    |      [ {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |        {uuid, accountid, tier1, tier2, tier3, 'WITHDRAW' / 'INVEST'},
+    |       ]
+    |
+    |----> pool the difference between the categories 'WITHDRAW' and 'INVEST' tierwise
+    |      sum(tier1, 'INVEST') - sum(tier1, 'WITHDRAW) = T1
+    |      sum(tier2, 'INVEST') - sum(tier2, 'WITHDRAW) = T2
+    |      sum(tier3, 'INVEST') - sum(tier3, 'WITHDRAW) = T3
+    |      in other words, for all the requests which has purpose="INVEST", it will add their tier1 to T1, tier2 to T2, and tier3 to T3. And for each request which has purpose="WITHDRAW" it will subtract their tier1 from T1, tier2 from T2, tier3 from T3.
+    |
+    |----> send request of the following form to the bank-asset-agent
+    |      connect with the bank-asset-agent using the appropriate Microservice APIs
+    |      {T1, T2, T3}
+    |
+    |----> recieve return status from the bank-asset-agent: STATUS
+    |
+    |----> on recieving, update status as 'COMPETED' or 'FAILED' of queue-db for the batch of 10 uuid based on bank-asset-agent response

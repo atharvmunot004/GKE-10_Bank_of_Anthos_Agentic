@@ -1,0 +1,33 @@
+Microservice description:
+- The 'queue-db' is a PostgreSQL database that stores invetment and withdrawal requests for the Bank Anthos portfolio management system,
+es a combined queue for investment and withdrawal operations with UUID consistency and a column representing whether the transaction is of type 'INVEST' or of type 'WITHDRAW'
+
+Connection description:
+- Service Name: 'queue-db'
+- Port: 5432
+- Database: queue-db
+- Username: queue-admin
+- Password: queue-pwd
+- connection: postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db
+
+Environment Variables:
+- QUEUE_DB_URI: Full database connection URI 
+- POSTGRES_DB: Database name (queue-db)
+- POSTGRES_USER: Database username (queue-admin)
+- POSTGRES_PASSWORD: Database password
+
+Database Schema description:
+- Only 1 Table: table storing investment and withdrawal requests
+
+Table structure:
+- queue_id (SERIAL PRIMARY KEY): Auto-incrementing unique identifier
+- accountid (VARCHAR(20) NOT NULL): Bank account number making the request
+- tier_1 (DECIMAL(20, 8) NOT NULL): Amount for Tier 1 (Conservative investments)
+- tier_2 (DECIMAL(20, 8) NOT NULL): Amount for Tier 2 (Moderate investments)
+- tier_3 (DECIMAL(20, 8) NOT NULL): Amount for Tier 3 (Aggressive investments)
+- uuid (VARCHAR(36) UNIQUE NOT NULL): Unique identifier for the queue entry
+- transaction_type (VARCHAR(20) NOT NULL): whether transaction is of type 'INVEST' or of type 'WITHDRAW'
+- status (VARCHAR(20) NOT NULL): Processing status
+- created_at (TIMESTAMP WITH TIME ZONE): When request was created
+- updated_at (TIMESTAMP WITH TIME ZONE): When request was last updated
+- processed_at (TIMESTAMP WITH TIME ZONE): When request was processed

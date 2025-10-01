@@ -1,0 +1,387 @@
+{
+  "created_by_ac_for_agent": {
+    "microservice_description": "Polls from queue-db for batches of 10 transactions to further preprocess them and then forward to bank-asset-agent.",
+    "ordered_flow_of_execution": {
+      "service_name": "user-request-queue-svc",
+      "input_format": {
+        "uuid": "string",
+        "accountid": "string",
+        "tier1": "number",
+        "tier2": "number",
+        "tier3": "number",
+        "purpose": "WITHDRAW or INVEST"
+      },
+      "steps": [
+        {
+          "step": 1,
+          "description": "polls from queue-db for a batch of 10 pending portfolio transactions",
+          "details": [
+            "using the DB Credentials for the queue-db microservice access the database",
+            "keep track of number of entries in the queue-db",
+            "as soon as 10 entries are present get those entries and keep track of them using uuid"
+          ]
+        },
+        {
+          "step": 2,
+          "description": "collect in the form of a list of 10",
+          "data_structure": [
+            {
+              "uuid": "string",
+              "accountid": "string",
+              "tier1": "number",
+              "tier2": "number",
+              "tier3": "number",
+              "purpose": "WITHDRAW or INVEST"
+            }
+          ],
+          "note": "Array of 10 objects with the above structure"
+        },
+        {
+          "step": 3,
+          "description": "pool the difference between the categories 'WITHDRAW' and 'INVEST' tierwise",
+          "calculations": {
+            "T1": "sum(tier1, 'INVEST') - sum(tier1, 'WITHDRAW')",
+            "T2": "sum(tier2, 'INVEST') - sum(tier2, 'WITHDRAW')",
+            "T3": "sum(tier3, 'INVEST') - sum(tier3, 'WITHDRAW')"
+          },
+          "explanation": "for all the requests which has purpose='INVEST', it will add their tier1 to T1, tier2 to T2, and tier3 to T3. And for each request which has purpose='WITHDRAW' it will subtract their tier1 from T1, tier2 from T2, tier3 from T3."
+        },
+        {
+          "step": 4,
+          "description": "send request of the following form to the bank-asset-agent",
+          "details": [
+            "connect with the bank-asset-agent using the appropriate Microservice APIs"
+          ],
+          "request_format": {
+            "T1": "number",
+            "T2": "number",
+            "T3": "number"
+          }
+        },
+        {
+          "step": 5,
+          "description": "receive return status from the bank-asset-agent: STATUS"
+        },
+        {
+          "step": 6,
+          "description": "on receiving, update status as 'COMPLETED' or 'FAILED' of queue-db for the batch of 10 uuid based on bank-asset-agent response"
+        }
+      ]
+    }
+  },
+  "created_by_agent_for_agent": {
+    "service_architecture": {
+      "technology_stack": {
+        "language": "Python 3.9+",
+        "framework": "FastAPI",
+        "database_client": "asyncpg (PostgreSQL async driver)",
+        "http_client": "httpx (async HTTP client)",
+        "logging": "structlog",
+        "monitoring": "prometheus-client (optional)",
+        "configuration": "pydantic-settings"
+      },
+      "service_structure": {
+        "main_module": "main.py",
+        "database_module": "database.py",
+        "models_module": "models.py",
+        "services_module": "services.py",
+        "config_module": "config.py",
+        "utils_module": "utils.py"
+      }
+    },
+    "database_integration": {
+      "queue_db_connection": {
+        "host": "queue-db",
+        "port": 5432,
+        "database": "queue-db",
+        "username": "queue-admin",
+        "password": "queue-pwd",
+        "connection_pool_size": 10,
+        "max_overflow": 20
+      },
+      "queries": {
+        "count_pending_requests": "SELECT COUNT(*) FROM queue_table WHERE status = 'PENDING'",
+        "fetch_batch": "SELECT * FROM queue_table WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 10",
+        "update_batch_status": "UPDATE queue_table SET status = $1, updated_at = NOW(), processed_at = NOW() WHERE uuid = ANY($2)"
+      }
+    },
+    "external_service_integration": {
+      "bank_asset_agent": {
+        "service_name": "bank-asset-agent",
+        "endpoint": "http://bank-asset-agent:8080/api/v1/process-portfolio",
+        "timeout": 30,
+        "retry_attempts": 3,
+        "retry_delay": 1,
+        "request_format": {
+          "T1": "decimal",
+          "T2": "decimal", 
+          "T3": "decimal"
+        },
+        "response_format": {
+          "status": "string (COMPLETED/FAILED)",
+          "message": "string (optional)",
+          "transaction_id": "string (optional)"
+        }
+      }
+    },
+    "data_models": {
+      "queue_transaction": {
+        "uuid": "str",
+        "accountid": "str",
+        "tier1": "Decimal",
+        "tier2": "Decimal",
+        "tier3": "Decimal",
+        "purpose": "str (INVEST/WITHDRAW)",
+        "status": "str (PENDING/COMPLETED/FAILED)",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "processed_at": "datetime"
+      },
+      "batch_request": {
+        "transactions": "List[queue_transaction]",
+        "batch_id": "str",
+        "created_at": "datetime"
+      },
+      "tier_calculation": {
+        "T1": "Decimal",
+        "T2": "Decimal",
+        "T3": "Decimal"
+      },
+      "asset_agent_request": {
+        "T1": "Decimal",
+        "T2": "Decimal",
+        "T3": "Decimal"
+      },
+      "asset_agent_response": {
+        "status": "str",
+        "message": "str",
+        "transaction_id": "str"
+      }
+    },
+    "core_components": {
+      "queue_poller": {
+        "description": "Polls queue-db for pending transactions",
+        "polling_interval": "5 seconds",
+        "batch_size": 10,
+        "concurrent_batches": 3
+      },
+      "batch_processor": {
+        "description": "Processes batches of 10 transactions",
+        "tier_calculator": "Calculates T1, T2, T3 differences",
+        "asset_agent_client": "Communicates with bank-asset-agent",
+        "status_updater": "Updates transaction statuses in queue-db"
+      },
+      "tier_calculator": {
+        "description": "Calculates tier differences between INVEST and WITHDRAW",
+        "algorithm": "Sum INVEST amounts - Sum WITHDRAW amounts per tier",
+        "precision": "Decimal(20,8)"
+      },
+      "status_manager": {
+        "description": "Manages transaction status updates",
+        "statuses": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"],
+        "batch_update": "Updates all UUIDs in batch atomically"
+      }
+    },
+    "api_endpoints": {
+      "health_check": {
+        "path": "/health",
+        "method": "GET",
+        "description": "Service health status"
+      },
+      "metrics": {
+        "path": "/metrics",
+        "method": "GET",
+        "description": "Prometheus metrics"
+      },
+      "batch_status": {
+        "path": "/api/v1/batch/{batch_id}/status",
+        "method": "GET",
+        "description": "Get batch processing status"
+      },
+      "force_poll": {
+        "path": "/api/v1/poll",
+        "method": "POST",
+        "description": "Manually trigger queue polling"
+      }
+    },
+    "configuration": {
+      "environment_variables": {
+        "QUEUE_DB_URI": "PostgreSQL connection string",
+        "BANK_ASSET_AGENT_URL": "Bank asset agent service URL",
+        "POLLING_INTERVAL": "Queue polling interval in seconds",
+        "BATCH_SIZE": "Number of transactions per batch",
+        "LOG_LEVEL": "Logging level (DEBUG/INFO/WARNING/ERROR)",
+        "SERVICE_PORT": "Service port (default: 8080)"
+      },
+      "default_values": {
+        "POLLING_INTERVAL": 5,
+        "BATCH_SIZE": 10,
+        "LOG_LEVEL": "INFO",
+        "SERVICE_PORT": 8080,
+        "MAX_RETRIES": 3,
+        "RETRY_DELAY": 1
+      }
+    },
+    "error_handling": {
+      "database_errors": {
+        "connection_failure": "Retry with exponential backoff",
+        "query_timeout": "Log error and continue polling",
+        "transaction_rollback": "Mark batch as failed"
+      },
+      "external_service_errors": {
+        "timeout": "Retry with backoff",
+        "service_unavailable": "Mark batch as failed, retry later",
+        "invalid_response": "Log error and mark as failed"
+      },
+      "data_validation_errors": {
+        "invalid_tier_values": "Skip invalid transactions",
+        "missing_required_fields": "Log and skip transaction"
+      }
+    },
+    "monitoring_and_observability": {
+      "metrics": {
+        "batches_processed_total": "Counter of processed batches",
+        "transactions_processed_total": "Counter of processed transactions",
+        "batch_processing_duration": "Histogram of batch processing time",
+        "queue_size": "Gauge of current queue size",
+        "failed_batches_total": "Counter of failed batches",
+        "external_service_response_time": "Histogram of asset agent response time"
+      },
+      "logging": {
+        "structured_logging": "JSON format with correlation IDs",
+        "log_levels": "DEBUG, INFO, WARNING, ERROR",
+        "log_fields": ["timestamp", "level", "service", "batch_id", "uuid", "message"]
+      },
+      "health_checks": {
+        "database_connectivity": "Check queue-db connection",
+        "external_service_connectivity": "Check bank-asset-agent availability",
+        "service_health": "Overall service health status"
+      }
+    },
+    "unit_testing": {
+      "test_structure": {
+        "test_directory": "tests/",
+        "test_files": [
+          "test_models.py",
+          "test_services.py",
+          "test_tier_calculator.py",
+          "test_database.py",
+          "test_api.py"
+        ]
+      },
+      "test_categories": {
+        "unit_tests": {
+          "tier_calculator_tests": "Test tier difference calculations",
+          "data_model_tests": "Test Pydantic models validation",
+          "service_logic_tests": "Test core business logic",
+          "utility_function_tests": "Test helper functions"
+        },
+        "test_data": {
+          "sample_transactions": "Mock transaction data for testing",
+          "edge_cases": "Empty batches, invalid data, boundary values",
+          "error_scenarios": "Database failures, external service errors"
+        }
+      },
+      "testing_tools": {
+        "framework": "pytest",
+        "async_support": "pytest-asyncio",
+        "mocking": "pytest-mock",
+        "coverage": "pytest-cov",
+        "fixtures": "pytest fixtures for test data"
+      }
+    },
+    "integration_testing": {
+      "test_environment": {
+        "test_database": "PostgreSQL test instance",
+        "mock_external_services": "Mock bank-asset-agent responses",
+        "test_containers": "Docker containers for integration tests"
+      },
+      "integration_test_scenarios": {
+        "end_to_end_flow": "Complete flow from queue polling to status update",
+        "database_integration": "Test database operations with real DB",
+        "external_service_integration": "Test communication with bank-asset-agent",
+        "error_recovery": "Test error handling and recovery mechanisms",
+        "concurrent_processing": "Test multiple batch processing simultaneously"
+      },
+      "test_data_management": {
+        "database_seeding": "Setup test data in queue-db",
+        "cleanup": "Cleanup test data after tests",
+        "isolation": "Each test runs in isolated environment"
+      }
+    },
+    "deployment_requirements": {
+      "containerization": {
+        "base_image": "python:3.9-slim",
+        "dependencies": "requirements.txt",
+        "health_check": "HTTP health endpoint",
+        "resource_limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        }
+      },
+      "kubernetes_manifest": {
+        "deployment": "user-request-queue-svc-deployment.yaml",
+        "service": "user-request-queue-svc-service.yaml",
+        "configmap": "user-request-queue-svc-config.yaml",
+        "secrets": "user-request-queue-svc-secrets.yaml"
+      },
+      "scaling": {
+        "horizontal_pod_autoscaler": "Scale based on CPU/memory usage",
+        "replicas": "Minimum 2, maximum 10",
+        "scaling_metrics": "CPU utilization, queue size"
+      }
+    },
+    "security_considerations": {
+      "database_security": {
+        "connection_encryption": "SSL/TLS for database connections",
+        "credential_management": "Kubernetes secrets for DB credentials",
+        "access_control": "Least privilege database access"
+      },
+      "network_security": {
+        "service_mesh": "Istio for service-to-service communication",
+        "tls_termination": "mTLS between services",
+        "network_policies": "Restrict network access"
+      },
+      "data_protection": {
+        "sensitive_data": "No sensitive data in logs",
+        "data_encryption": "Encrypt data in transit and at rest",
+        "audit_logging": "Log all database operations"
+      }
+    },
+    "performance_optimization": {
+      "database_optimization": {
+        "connection_pooling": "Async connection pool",
+        "query_optimization": "Indexed queries, prepared statements",
+        "batch_operations": "Batch database updates"
+      },
+      "async_processing": {
+        "async_io": "Non-blocking I/O operations",
+        "concurrent_batches": "Process multiple batches simultaneously",
+        "background_tasks": "Async background polling"
+      },
+      "caching": {
+        "connection_caching": "Reuse database connections",
+        "response_caching": "Cache external service responses if applicable"
+      }
+    },
+    "operational_procedures": {
+      "startup_sequence": [
+        "Initialize database connection pool",
+        "Verify external service connectivity",
+        "Start background polling task",
+        "Register health check endpoints"
+      ],
+      "shutdown_sequence": [
+        "Stop background polling",
+        "Complete current batch processing",
+        "Close database connections",
+        "Graceful shutdown"
+      ],
+      "maintenance": {
+        "log_rotation": "Rotate logs daily",
+        "metrics_retention": "Retain metrics for 30 days",
+        "database_maintenance": "Regular database cleanup"
+      }
+    }
+  }
+}
