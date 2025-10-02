@@ -1,0 +1,222 @@
+# Assets-DB PostgreSQL Database Service
+# Kubernetes manifest for local deployment
+# Copyright 2024 Google LLC
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assets-db-config
+  labels:
+    app: assets-db
+    component: database
+    environment: development
+data:
+  POSTGRES_DB: "assets-db"
+  POSTGRES_USER: "assets-admin"
+  POSTGRES_PASSWORD: "assets-pwd"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: assets-db
+  labels:
+    app: assets-db
+    component: database
+    environment: development
+spec:
+  type: NodePort
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      nodePort: 30432
+  selector:
+    app: assets-db
+    component: database
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: assets-db-storage
+  labels:
+    app: assets-db
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assets-db
+  labels:
+    app: assets-db
+    component: database
+    environment: development
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: assets-db
+      component: database
+  template:
+    metadata:
+      labels:
+        app: assets-db
+        component: database
+        environment: development
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:13-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: assets-db-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: assets-db-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: assets-db-config
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - assets-admin
+                - -d
+                - assets-db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - assets-admin
+                - -d
+                - assets-db
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: assets-db-storage
+        - name: init-scripts
+          configMap:
+            name: assets-db-init-scripts
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assets-db-init-scripts
+  labels:
+    app: assets-db
+    component: database
+data:
+  0-assets-schema.sql: |
+    -- Copyright 2024 Google LLC
+    --
+    -- Licensed under the Apache License, Version 2.0 (the "License");
+    -- you may not use this file except in compliance with the License.
+    -- You may obtain a copy of the License at
+    --
+    --     https://www.apache.org/licenses/LICENSE-2.0
+    --
+    -- Unless required by applicable law or agreed to in writing, software
+    -- distributed under the License is distributed on an "AS IS" BASIS,
+    -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    -- See the License for the specific language governing permissions and
+    -- limitations under the License.
+
+    CREATE TABLE IF NOT EXISTS assets (
+        asset_id SERIAL PRIMARY KEY,
+        tier_number INTEGER NOT NULL CHECK (tier_number IN (1, 2, 3)),
+        asset_name VARCHAR(64) UNIQUE NOT NULL,
+        amount DECIMAL(20, 8) NOT NULL CHECK (amount >= 0),
+        price_per_unit DECIMAL(20, 2) NOT NULL CHECK (price_per_unit > 0),
+        last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create indexes for commonly queried columns
+    CREATE INDEX IF NOT EXISTS idx_assets_tier ON assets (tier_number);
+    CREATE INDEX IF NOT EXISTS idx_assets_name ON assets (asset_name);
+
+    -- Add comments for better documentation
+    COMMENT ON TABLE assets IS 'Stores information about available investment assets';
+    COMMENT ON COLUMN assets.tier_number IS 'Investment tier (1, 2, or 3)';
+    COMMENT ON COLUMN assets.asset_name IS 'Unique identifier for the asset';
+    COMMENT ON COLUMN assets.amount IS 'Available units for investment';
+    COMMENT ON COLUMN assets.price_per_unit IS 'Current price per unit in USD';
+    COMMENT ON COLUMN assets.last_updated IS 'Timestamp of last price/amount update';
+
+    -- Insert sample data for development/testing
+    INSERT INTO assets (tier_number, asset_name, amount, price_per_unit) VALUES
+        (1, 'BTC', 100.00000000, 45000.00),
+        (1, 'ETH', 500.00000000, 3200.00),
+        (2, 'SPY', 1000.00000000, 450.00),
+        (2, 'QQQ', 800.00000000, 380.00),
+        (3, 'REIT_A', 100.00000000, 25.50),
+        (3, 'REIT_B', 200.00000000, 30.75)
+    ON CONFLICT (asset_name) DO NOTHING;
+
+---
+# Optional: NetworkPolicy for security (if supported by your cluster)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: assets-db-network-policy
+  labels:
+    app: assets-db
+    component: database
+spec:
+  podSelector:
+    matchLabels:
+      app: assets-db
+      component: database
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: bank-of-anthos
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -1,0 +1,346 @@
+{
+  "service": {
+    "name": "assets-db",
+    "description": "PostgreSQL database that stores investment asset data for the Bank of Anthos portfolio management system. Provides real-time asset information including prices, availability, and tier classifications.",
+    "type": "database",
+    "technology": "PostgreSQL 13"
+  },
+  "connection": {
+    "service_name": "assets-db",
+    "port": 5432,
+    "database": "assets-db",
+    "username": "assets-admin",
+    "password": "assets-pwd",
+    "connection_uri": "postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db"
+  },
+  "environment_variables": {
+    "ASSETS_DB_URI": {
+      "description": "Full database connection URI",
+      "example": "postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db"
+    },
+    "POSTGRES_DB": {
+      "description": "Database name",
+      "value": "assets-db"
+    },
+    "POSTGRES_USER": {
+      "description": "Database username",
+      "value": "assets-admin"
+    },
+    "POSTGRES_PASSWORD": {
+      "description": "Database password",
+      "value": "assets-pwd"
+    }
+  },
+  "database_schema": {
+    "tables": {
+      "assets": {
+        "description": "Primary table storing investment asset information",
+        "columns": {
+          "asset_id": {
+            "type": "SERIAL",
+            "constraints": ["PRIMARY KEY"],
+            "description": "Auto-incrementing unique identifier"
+          },
+          "tier_number": {
+            "type": "INTEGER",
+            "constraints": ["NOT NULL", "CHECK (tier_number IN (1, 2, 3))"],
+            "description": "Investment tier (1, 2, or 3)"
+          },
+          "asset_name": {
+            "type": "VARCHAR(64)",
+            "constraints": ["UNIQUE", "NOT NULL"],
+            "description": "Unique asset identifier"
+          },
+          "amount": {
+            "type": "DECIMAL(20, 8)",
+            "constraints": ["NOT NULL", "CHECK (amount >= 0)"],
+            "description": "Available units for investment"
+          },
+          "price_per_unit": {
+            "type": "DECIMAL(20, 2)",
+            "constraints": ["NOT NULL", "CHECK (price_per_unit > 0)"],
+            "description": "Current price per unit in USD"
+          },
+          "last_updated": {
+            "type": "TIMESTAMP WITH TIME ZONE",
+            "constraints": ["DEFAULT CURRENT_TIMESTAMP"],
+            "description": "Timestamp of last update"
+          }
+        },
+        "indexes": {
+          "idx_assets_tier": {
+            "columns": ["tier_number"],
+            "description": "Index for fast tier-based queries"
+          },
+          "idx_assets_name": {
+            "columns": ["asset_name"],
+            "description": "Index for fast name lookups"
+          }
+        }
+      }
+    }
+  },
+  "asset_tiers": {
+    "tier_1": {
+      "name": "Most liquid assets",
+      "examples": ["Cryptocurrencies"],
+      "settlement": "Immediate settlement"
+    },
+    "tier_2": {
+      "name": "Medium liquidity",
+      "examples": ["ETFs", "Stocks"],
+      "settlement": "36-48 hour settlement"
+    },
+    "tier_3": {
+      "name": "Less liquid investments",
+      "examples": ["Real Estate", "Private Equity"],
+      "settlement": "Longer settlement"
+    }
+  },
+  "common_queries": {
+    "get_all_assets": {
+      "description": "Get all assets ordered by tier and name",
+      "sql": "SELECT asset_id, tier_number, asset_name, amount, price_per_unit, last_updated FROM assets ORDER BY tier_number, asset_name;"
+    },
+    "get_assets_by_tier": {
+      "description": "Get assets filtered by tier",
+      "sql": "SELECT asset_id, asset_name, amount, price_per_unit, last_updated FROM assets WHERE tier_number = $1 ORDER BY asset_name;",
+      "parameters": ["tier_number"]
+    },
+    "get_specific_asset": {
+      "description": "Get specific asset by name",
+      "sql": "SELECT asset_id, tier_number, asset_name, amount, price_per_unit, last_updated FROM assets WHERE asset_name = $1;",
+      "parameters": ["asset_name"]
+    },
+    "check_asset_availability": {
+      "description": "Check if asset has sufficient amount available",
+      "sql": "SELECT asset_name, amount, price_per_unit FROM assets WHERE asset_name = $1 AND amount >= $2;",
+      "parameters": ["asset_name", "required_amount"]
+    },
+    "update_asset_amount": {
+      "description": "Update asset amount",
+      "sql": "UPDATE assets SET amount = $1, last_updated = CURRENT_TIMESTAMP WHERE asset_name = $2;",
+      "parameters": ["new_amount", "asset_name"]
+    },
+    "update_asset_price": {
+      "description": "Update asset price",
+      "sql": "UPDATE assets SET price_per_unit = $1, last_updated = CURRENT_TIMESTAMP WHERE asset_name = $2;",
+      "parameters": ["new_price", "asset_name"]
+    },
+    "get_asset_statistics_by_tier": {
+      "description": "Get aggregated statistics by tier",
+      "sql": "SELECT tier_number, COUNT(*) as asset_count, SUM(amount * price_per_unit) as total_value, AVG(price_per_unit) as avg_price FROM assets GROUP BY tier_number ORDER BY tier_number;"
+    }
+  },
+  "python_integration": {
+    "sqlalchemy": {
+      "description": "SQLAlchemy ORM integration example",
+      "dependencies": ["sqlalchemy", "psycopg2-binary"],
+      "model_example": {
+        "imports": [
+          "from sqlalchemy import create_engine, Column, Integer, String, Numeric, DateTime",
+          "from sqlalchemy.ext.declarative import declarative_base",
+          "from sqlalchemy.orm import sessionmaker",
+          "import os"
+        ],
+        "connection": "DATABASE_URI = os.environ.get('ASSETS_DB_URI', 'postgresql://assets-admin:assets-pwd@assets-db:5432/assets-db')",
+        "model": {
+          "class_name": "Asset",
+          "table_name": "assets",
+          "columns": {
+            "asset_id": "Column(Integer, primary_key=True)",
+            "tier_number": "Column(Integer, nullable=False)",
+            "asset_name": "Column(String(64), unique=True, nullable=False)",
+            "amount": "Column(Numeric(20, 8), nullable=False)",
+            "price_per_unit": "Column(Numeric(20, 2), nullable=False)",
+            "last_updated": "Column(DateTime(timezone=True))"
+          }
+        }
+      }
+    },
+    "psycopg2": {
+      "description": "Direct PostgreSQL adapter usage",
+      "dependencies": ["psycopg2-binary"],
+      "connection_example": "conn = psycopg2.connect(os.environ.get('ASSETS_DB_URI'))"
+    }
+  },
+  "error_handling": {
+    "connection_errors": {
+      "exception": "psycopg2.OperationalError",
+      "description": "Handle database connection issues"
+    },
+    "constraint_violations": {
+      "exception": "psycopg2.IntegrityError",
+      "description": "Handle constraint violations (unique, check, foreign key)"
+    },
+    "best_practices": [
+      "Use transactions for multi-step operations",
+      "Implement proper connection pooling for production",
+      "Use parameterized queries to prevent SQL injection",
+      "Validate input data before database operations"
+    ]
+  },
+  "performance_considerations": {
+    "indexing": [
+      "Use indexes for tier_number and asset_name queries",
+      "Monitor query performance with EXPLAIN ANALYZE"
+    ],
+    "connection_management": [
+      "Consider connection pooling for high-traffic applications",
+      "Use prepared statements for repeated queries"
+    ],
+    "query_optimization": [
+      "Use appropriate WHERE clauses",
+      "Limit result sets when possible",
+      "Use EXPLAIN ANALYZE for query planning"
+    ]
+  },
+  "security": {
+    "authentication": {
+      "jwt_required": false,
+      "description": "No JWT authentication required (database service)"
+    },
+    "best_practices": [
+      "Use parameterized queries to prevent SQL injection",
+      "Validate input data before database operations",
+      "Use environment variables for sensitive configuration",
+      "Implement proper access controls in production"
+    ]
+  },
+  "testing": {
+    "overview": "Comprehensive end-to-end testing with Docker container management",
+    "test_file": "tests/test_assets_db_e2e.py",
+    "features": [
+      "Automatic Docker container lifecycle management",
+      "Database schema validation",
+      "Constraint enforcement testing",
+      "Query performance benchmarks",
+      "CRUD operation testing",
+      "Transaction rollback testing",
+      "Error handling validation"
+    ],
+    "usage": {
+      "command": "python test_assets_db_e2e.py",
+      "directory": "src/assets-db/tests/",
+      "prerequisites": [
+        "Python 3.7+",
+        "Docker Desktop (running)",
+        "Internet connection (for PostgreSQL image)"
+      ]
+    },
+    "test_coverage": {
+      "schema_validation": [
+        "Table existence and structure",
+        "Primary key and unique constraints",
+        "Check constraints (tier, amount, price)",
+        "Index performance",
+        "Data types validation"
+      ],
+      "data_integrity": [
+        "Constraint enforcement",
+        "Data type consistency",
+        "Decimal precision",
+        "Null value handling"
+      ],
+      "query_functionality": [
+        "CRUD operations",
+        "Complex queries",
+        "Aggregation queries",
+        "Performance testing"
+      ],
+      "error_handling": [
+        "Connection errors",
+        "Constraint violations",
+        "SQL injection protection",
+        "Transaction rollback"
+      ]
+    },
+    "container_management": {
+      "image_build": "Builds PostgreSQL 13 container with schema",
+      "lifecycle": "Automatic start, test, stop, cleanup",
+      "health_checks": "Waits for database readiness",
+      "cleanup": "Removes containers and images automatically"
+    }
+  },
+  "deployment": {
+    "kubernetes": {
+      "command": "kubectl apply -f k8s/overlays/development/",
+      "description": "Deploy using Kubernetes manifests"
+    },
+    "skaffold": {
+      "command": "skaffold dev --module assets-db",
+      "description": "Development deployment with Skaffold"
+    },
+    "docker": {
+      "build_command": "docker build -t assets-db .",
+      "description": "Build Docker image for deployment"
+    }
+  },
+  "files_structure": {
+    "main_files": {
+      "initdb/0-assets-schema.sql": "Database schema initialization",
+      "Dockerfile": "PostgreSQL container configuration",
+      "llm.txt": "This documentation file (JSON format)"
+    },
+    "test_files": {
+      "tests/test_assets_db_e2e.py": "Complete end-to-end test suite",
+      "tests/Dockerfile": "Test-specific PostgreSQL container",
+      "tests/initdb/0-assets-schema.sql": "Schema for testing",
+      "tests/README.md": "Testing documentation",
+      "tests/CHANGELOG.md": "Test fixes and improvements"
+    }
+  },
+  "sample_data": {
+    "test_assets": [
+      {
+        "tier_number": 1,
+        "asset_name": "BTC",
+        "amount": "100.00000000",
+        "price_per_unit": "45000.00",
+        "description": "Bitcoin cryptocurrency"
+      },
+      {
+        "tier_number": 1,
+        "asset_name": "ETH",
+        "amount": "500.00000000",
+        "price_per_unit": "3200.00",
+        "description": "Ethereum cryptocurrency"
+      },
+      {
+        "tier_number": 2,
+        "asset_name": "SPY",
+        "amount": "1000.00000000",
+        "price_per_unit": "450.00",
+        "description": "S&P 500 ETF"
+      },
+      {
+        "tier_number": 2,
+        "asset_name": "QQQ",
+        "amount": "800.00000000",
+        "price_per_unit": "380.00",
+        "description": "NASDAQ ETF"
+      },
+      {
+        "tier_number": 3,
+        "asset_name": "REIT_A",
+        "amount": "100.00000000",
+        "price_per_unit": "25.50",
+        "description": "Real Estate Investment Trust A"
+      },
+      {
+        "tier_number": 3,
+        "asset_name": "REIT_B",
+        "amount": "200.00000000",
+        "price_per_unit": "30.75",
+        "description": "Real Estate Investment Trust B"
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "last_updated": "2025-10-02",
+    "format": "JSON",
+    "maintainer": "Bank of Anthos Team",
+    "documentation_type": "LLM-friendly service specification"
+  }
+}
