@@ -53,15 +53,15 @@ class TestDatabaseManager:
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value=1)
         
-        mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-        
-        self.db_manager.pool = mock_pool
-        
-        result = await self.db_manager.is_connected()
-        
-        assert result is True
-        mock_conn.fetchval.assert_called_once_with("SELECT 1")
+        # Use proper async context manager mock
+        with patch.object(self.db_manager.pool, 'acquire') as mock_acquire:
+            mock_acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+            
+            result = await self.db_manager.is_connected()
+            
+            assert result is True
+            mock_conn.fetchval.assert_called_once_with("SELECT 1")
     
     @pytest.mark.asyncio
     async def test_is_connected_no_pool(self):
@@ -79,7 +79,10 @@ class TestDatabaseManager:
         mock_conn.fetchval = AsyncMock(side_effect=asyncpg.ConnectionDoesNotExistError("Connection failed"))
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -94,7 +97,10 @@ class TestDatabaseManager:
         mock_conn.fetchval = AsyncMock(return_value=15)
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -112,7 +118,10 @@ class TestDatabaseManager:
         mock_conn.fetchval = AsyncMock(return_value=None)
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -127,7 +136,10 @@ class TestDatabaseManager:
         mock_conn.fetchval = AsyncMock(side_effect=asyncpg.PostgresError("Query failed"))
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -168,7 +180,10 @@ class TestDatabaseManager:
         mock_conn.fetch = AsyncMock(return_value=mock_rows)
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -188,7 +203,10 @@ class TestDatabaseManager:
         mock_conn.fetch = AsyncMock(return_value=[])
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -203,7 +221,10 @@ class TestDatabaseManager:
         mock_conn.fetch = AsyncMock(side_effect=asyncpg.PostgresError("Query failed"))
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -222,7 +243,10 @@ class TestDatabaseManager:
         mock_conn.execute = AsyncMock(return_value="UPDATE 3")
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -246,7 +270,10 @@ class TestDatabaseManager:
         mock_conn.execute = AsyncMock(side_effect=asyncpg.PostgresError("Update failed"))
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -273,7 +300,10 @@ class TestDatabaseManager:
         mock_conn.fetchrow = AsyncMock(return_value=mock_row)
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -291,7 +321,10 @@ class TestDatabaseManager:
         mock_conn.fetchrow = AsyncMock(return_value=None)
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         
@@ -306,7 +339,10 @@ class TestDatabaseManager:
         mock_conn.fetchrow = AsyncMock(side_effect=asyncpg.PostgresError("Query failed"))
         
         mock_pool = AsyncMock()
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_context_manager = AsyncMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_context_manager
         
         self.db_manager.pool = mock_pool
         

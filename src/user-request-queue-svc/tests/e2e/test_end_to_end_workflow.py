@@ -2,6 +2,7 @@
 End-to-end tests for complete workflow
 """
 import pytest
+import pytest_asyncio
 import asyncio
 import httpx
 from decimal import Decimal
@@ -18,7 +19,7 @@ from models import QueueTransaction, TransactionType, TransactionStatus
 class TestEndToEndWorkflow:
     """End-to-end tests for complete transaction processing workflow"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def e2e_setup(self):
         """Setup for end-to-end tests with mocked dependencies"""
         # Mock database manager

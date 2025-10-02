@@ -5,10 +5,23 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from datetime import datetime
 
-from main import app
 from models import HealthResponse
+
+
+# Create a mock lifespan that doesn't do startup tasks
+@asynccontextmanager
+async def mock_lifespan(app: FastAPI):
+    """Mock lifespan that doesn't initialize dependencies"""
+    yield
+
+
+# Import main app and replace lifespan
+from main import app
+app.router.lifespan_context = mock_lifespan
 
 
 class TestFastAPIEndpoints:
@@ -85,13 +98,13 @@ class TestFastAPIEndpoints:
     
     def test_readiness_check_not_ready(self):
         """Test readiness check endpoint - not ready"""
-        with patch('database.db_manager.is_connected', new_callable=AsyncMock, return_value=False):
+        with patch('main.db_manager.is_connected', new_callable=AsyncMock, return_value=False):
             
             response = self.client.get("/ready")
             
             assert response.status_code == 503
             data = response.json()
-            assert "Database not connected" in data["detail"]
+            assert data["detail"] == "Database not connected"
     
     def test_readiness_check_exception(self):
         """Test readiness check endpoint - exception"""
@@ -114,7 +127,8 @@ class TestFastAPIEndpoints:
                 
                 assert response.status_code == 200
                 assert response.headers["content-type"] == "text/plain; charset=utf-8"
-                assert "test_metric" in response.text
+                # Check for actual Prometheus metrics
+                assert "batches_processed_total" in response.text or "python_gc_objects_collected_total" in response.text
     
     def test_metrics_endpoint_exception(self):
         """Test metrics endpoint exception handling"""

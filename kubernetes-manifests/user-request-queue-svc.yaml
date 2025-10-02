@@ -109,7 +109,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: environment-config
-          image: us-central1-docker.pkg.dev/bank-of-anthos-ci/bank-of-anthos/user-request-queue-svc:v1.0.0
+          image: localhost:5000/user-request-queue-svc:v1.0.0
           name: user-request-queue-svc
           livenessProbe:
             httpGet:
