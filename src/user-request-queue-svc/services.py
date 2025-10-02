@@ -77,7 +77,7 @@ class AssetAgentClient:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(
                         self.base_url,
-                        json=request_data.dict()
+                        json=request_data.model_dump()
                     )
                     response.raise_for_status()
                     

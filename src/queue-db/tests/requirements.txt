@@ -22,7 +22,6 @@ pytest-mock>=3.10.0
 
 # Database testing
 psycopg2-binary>=2.9.0
-pytest-postgresql>=4.1.0
 testcontainers>=3.4.0
 
 # Performance testing
