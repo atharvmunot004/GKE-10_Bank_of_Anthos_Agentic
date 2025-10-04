@@ -1,0 +1,292 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent-config
+data:
+  HOST: "0.0.0.0"
+  PORT: "8080"
+  LOG_LEVEL: "INFO"
+  VERSION: "v1.0.0"
+  GEMINI_MODEL: "gemini-1.5-pro"
+  LLM_TEMPERATURE: "0.1"
+  LLM_MAX_TOKENS: "4000"
+  LLM_TIMEOUT: "30"
+  LEDGER_DB_URL: "http://ledger-db:8080"
+  QUEUE_DB_URL: "http://queue-db:8080"
+  PORTFOLIO_DB_URL: "http://portfolio-db:8080"
+  REDIS_URL: "redis://redis:6379"
+  CACHE_TTL: "300"
+  DEFAULT_TIER1_PERCENTAGE: "20"
+  DEFAULT_TIER2_PERCENTAGE: "30"
+  DEFAULT_TIER3_PERCENTAGE: "50"
+  DEFAULT_TRANSACTION_HISTORY_LIMIT: "100"
+  CONNECTION_POOL_SIZE: "10"
+  MAX_RETRIES: "3"
+  RETRY_DELAY: "1"
+  CIRCUIT_BREAKER_THRESHOLD: "5"
+  CIRCUIT_BREAKER_TIMEOUT: "60"
+  RATE_LIMIT_PER_MINUTE: "60"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent-secrets
+type: Opaque
+data:
+  GEMINI_API_KEY: <base64-encoded-gemini-api-key>
+  JWT_SECRET_KEY: <base64-encoded-jwt-secret-key>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: user-tier-agent
+      application: bank-of-anthos
+      environment: development
+      team: ai
+      tier: backend
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: user-tier-agent
+        application: bank-of-anthos
+        environment: development
+        team: ai
+        tier: backend
+    spec:
+      containers:
+        - env:
+            - name: VERSION
+              value: "v1.0.0"
+            - name: SERVICE_PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - configMapRef:
+                name: user-tier-agent-config
+            - secretRef:
+                name: user-tier-agent-secrets
+          image: localhost:5000/user-tier-agent:v1.0.0
+          name: user-tier-agent
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 0.5Gi
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 0.5Gi
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - all
+            privileged: false
+            readOnlyRootFilesystem: true
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+      serviceAccountName: user-tier-agent
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: user-tier-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: bank-of-anthos
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: bank-of-anthos
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 5432
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-tier-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app: user-tier-agent
+    application: bank-of-anthos
+    environment: development
+    team: ai
+    tier: backend
+  name: user-tier-agent-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-tier-agent

@@ -1,0 +1,115 @@
+Microservice description:
+- An AI agent powered by gemini, that learns from the transaction history of a particular user and allots the money he / she wants to invest to or withdraw from into 3 tiers. 
+- The spread of money amongst these 3 tiers is extremely crucial for maintaining the financial stability of a user.
+
+LLM and Framework:
+- Model: The agent's core reasoning is powered by a Google Gemini model (eg; gemini-1.5-pro), accessed via API,
+- Framework: The agent is built and orchestrated using the Langchain open-source framework. Langchain manages the prompts, tool calls, and the overall execution loop
+
+Tools:
+- collect_user_transaction_history(accountid, N): 
+    a. Tool that collects a set of N transactions for a particular user (accountid) from the ledger-db (using the correct ledger-db API endpoints mentioned). After collecting, convert the transactions into a list of the following format (from the table named TRANSACTIONS):
+        [
+            {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+            {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+            {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+            .
+            .
+            .
+        ]
+    b. Then this tools returns the list back to the agent,
+- publish_allocation_to_queue(uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST')
+    a. this tool takes the final calculated split and pushes it to queue-db,
+    b. It returns a success / failure status to the agent,
+- add_transaction_to_portfolio_db(uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST')
+    a. This tool connects to the user-portfolios-db,
+    b. It appends the result payload to the portfolio-transactions-tb table,
+    c. It returns a success/failure status to the agent.
+
+Agent Prompt:
+"You are a 'Financial Tier Allocation Agent'. Your primary goal is to intelligently split a user's investment or withdrawal amount into three finanical tiers based on their transaction history.
+Tier Definitions:
+    a. Tier 1: Money invested in this tier is the most liquid. It can be withdrawn almost instantaneously in conditions of urgent money requirements / emergencies. Money invested in this tier is invested with the purpose that a sudden unexpected requirement of money can be fulfilled.
+
+    b. Tier 2: Money invested in this tier is moderately liquid. It can be withdrawn within a timespan of atmost 15 days (a fortnite) for purposes of planned / monthly / recurring payments. Money is invested in this tier considering these steady / regular expenses.
+
+    c. Tier 3: Money invested in this tier is the least liquid and is meant for purposes of long term investments. The money invested in this tier is invested with the purpose of building a strong and steady wealth spanning over the lifetime of the user. Money may be withdrawn from this tier but it usually is meant to be non-volatile and meant to compound over a period of few years. Unless an unexpected expense of huge amount comes into the picture, money is not to be withdrawn from this tier.
+Your process would be as follows:
+1. You will recieve a request in the form of a JSON payload: {uuid, accountid, amount, purpose: 'WITHDRAW' / 'PURPOSE'} from either of the two microservices: a) invest-svc, b) withdraw-svc,
+2. First, you must decide how many transactions (N) you need to analyze to understand the user's spending habits (expense trends). A good starting point is 100, but adjust if you think more or less data is needed,
+3. call the collect_user_transaction_history tool with 'accountid' and chosen 'N',
+4. analyse the transaction history provided by the tool. Look for patterns: 
+    a. frequent small purchases (daily life), 
+    b. large monthly debits (rent/bills),
+    c. large infrequent credits / debits (investments / salary),
+    Additionally consider nuances, one example being: If a user's spending is erratic, then he / she would require more investment in tier1. Similarly, by the same logic during withdrawal, he / she would withdraw more from tier1 as well.
+5. Based on this analysis, calculate the split for the user's request amount into tier1, tier2, and tier3. Crucially, the sum of tier1, tier2, and tier3 must exactly equal the original 'amount' in the request. Provide your reasoning.
+6. Once you have the final allocation, call the publish_allocation_to_queue tool with all the required information.
+7. After successfully publishing to the queue, you must also save the transaction by calling the add_transaction_to_portfolio_db tool with the same information. This is a mandatory final step.
+Error Handling: If any tool fails or returns an error, do not try again. Your task is to report the failure clearly. For example: 'The collect_user_transaction_history tool failed to connect to the database.'"
+
+
+Technology Stack / Implementation Details:
+- Orchestration Framework: LangChain (Python) is used to structure the agent,
+- LLM Integration: The connection to the Gemini API is managed through the langchain-google-genai library,
+- Agent Runtime: The agent's logic is executed using LangChain's AgentExecutor, which handles the reasoning and acting (ReAct) loop,
+- Tools: The tools (collect_user_transaction_history, etc.) are implemented as standard Python functions and are made available to the agent using LangChain's @tool decorator.
+
+Database Connection:
+    a. connects with ledger-db using the API endpoint provided (and if other credentials are required)
+    b. connects with queue-db using the API endpoints provided (and if other credentials are required)
+
+Ordered flow of execution:
+user-tier-agent
+    |
+    |
+    | (input: {uuid, accountid, amount, purpose: 'WITHDRAW' / 'PURPOSE'})
+    |
+    |----> Agent (Gemini Brain with prompt)
+    |          - analyses input.
+    |          - decides it needs transaction history. 
+    |          - chooses a suitable number of transaction required to learn user' spending habits (N)
+    |
+    |----> Tool Call (collect_user_transaction_history)
+    |          - tool connects to ledger-db,
+    |          - fetches the required data,
+    |          - returns a list of transactions,
+    |              [
+    |               {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+    |               {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+    |               {TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP},
+    |               .
+    |               .
+    |               .
+    |              ]
+    |
+    |----> Agent (Gemini Brain with prompt)
+    |          - recieves a list of transaction,
+    |          - analyses patterns,
+    |          - Example thinking: "with total amount to invest as $10000 and seeing that there is a recurring monthly debt of $2000 and frequent small food purchases, this user need a solid tier 2 for planned expenses"
+    |          - Example final split: {tier1: 1000, tier2: 2000, tier3: 7000}
+    |
+    |----> Tool Call (publish_allocation_to_queue)
+    |          - tool connects to queue-db,
+    |          - appends the payload
+    |              {uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST'}
+    |          - recieve response from queue-db regarding status of appending the payload as an entry,
+    |
+    |----> Agent (Gemini Brain with prompt)
+    |          - recieves status from publish_allocation_to_queue tool regarding status of task,
+    |          - proceeds to the next mandatory steps
+    |
+    |----> Tool Call (add_transaction_to_portfolio_db)
+    |          - tool connects to user-portfolios-db and appends the payload
+    |              {uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST'}
+    |          - tool returns a success status
+    |
+    |----> Agent (Gemini Brain with prompt)
+               - recieves final success status. The task is now complete.
+    
+
+Handling Edge Cases and Errors
+    1. New Users: What if an accountid has zero transaction history? The agent needs a fallback plan, like suggesting a default split (e.g., 20% Tier 1, 30% Tier 2, 50% Tier 3) and informing the user.
+    2. Tool Failures: What happens if the ledger-db API is down and collect_user_transaction_history fails? The agent needs to be able to report the failure gracefully.
+    3. LLM Hallucinations: What if Gemini returns a malformed response or an invalid split (e.g., tiers that don't add up to the total amount)? Your application code needs to validate the agent's final output before publishing it.
+    4. Invalid Input: The microservice should validate the input payload before invoking the agent. Specifically, it should check that the amount is a positive number (greater than zero).
