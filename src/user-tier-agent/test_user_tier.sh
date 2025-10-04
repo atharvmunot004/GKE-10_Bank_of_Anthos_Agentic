@@ -102,7 +102,7 @@ setup_environment() {
         log_info "Creating .env file..."
         cp env.example .env
         # Set a dummy API key for testing
-        echo "GEMINI_API_KEY=test-api-key-for-testing" >> .env
+        echo "GOOGLE_API_KEY=test-api-key-for-testing" >> .env
     fi
     
     # Install dependencies

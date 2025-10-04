@@ -113,7 +113,7 @@ def mock_health_response():
 @pytest.fixture(autouse=True)
 def mock_environment_variables(monkeypatch):
     """Mock environment variables for testing"""
-    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-api-key")
     monkeypatch.setenv("LEDGER_DB_URL", "http://test-ledger-db:8080")
     monkeypatch.setenv("QUEUE_DB_URL", "http://test-queue-db:8080")
     monkeypatch.setenv("PORTFOLIO_DB_URL", "http://test-portfolio-db:8080")

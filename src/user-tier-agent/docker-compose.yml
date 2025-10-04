@@ -12,7 +12,7 @@ services:
       - PORT=8080
       - LOG_LEVEL=DEBUG
       - VERSION=v1.0.0
-      - GEMINI_API_KEY=AIzaSyBbCbjRhbrrtsauZZn7cRUUDYvhMoaPV9U
+      - GEMINI_API_KEY=${GOOGLE_API_KEY}
       - ENVIRONMENT=test
       - GEMINI_MODEL=gemini-2.5-flash
       - LLM_TEMPERATURE=0.1

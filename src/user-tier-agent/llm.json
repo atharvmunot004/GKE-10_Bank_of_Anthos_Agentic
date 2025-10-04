@@ -219,7 +219,7 @@
         "LEDGER_DB_URL": "URL for ledger database API",
         "QUEUE_DB_URL": "URL for queue database API", 
         "PORTFOLIO_DB_URL": "URL for portfolio database API",
-        "GEMINI_API_KEY": "Google Gemini API key",
+        "GEMINI_API_KEY": "Google Gemini API key (from GOOGLE_API_KEY environment variable)",
         "LOG_LEVEL": "INFO/DEBUG/ERROR",
         "PORT": "8080",
         "HOST": "0.0.0.0"

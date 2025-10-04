@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # LLM Configuration
-    GEMINI_API_KEY: str = "test-api-key-for-testing"
+    GEMINI_API_KEY: str = os.getenv("GOOGLE_API_KEY", "test-api-key-for-testing")
     GEMINI_MODEL: str = "gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 4000

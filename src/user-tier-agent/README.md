@@ -129,7 +129,7 @@ Prometheus metrics endpoint.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GEMINI_API_KEY` | Google Gemini API key | Required |
+| `GEMINI_API_KEY` | Google Gemini API key (from GOOGLE_API_KEY env var) | Required |
 | `LEDGER_DB_URL` | Ledger database URL | `http://ledger-db:8080` |
 | `QUEUE_DB_URL` | Queue database URL | `http://queue-db:8080` |
 | `PORTFOLIO_DB_URL` | Portfolio database URL | `http://portfolio-db:8080` |
