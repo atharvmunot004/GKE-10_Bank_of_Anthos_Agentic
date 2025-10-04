@@ -81,8 +81,8 @@ metadata:
   name: user-tier-agent-secrets
 type: Opaque
 data:
-  GEMINI_API_KEY: <base64-encoded-google-api-key>
-  JWT_SECRET_KEY: <base64-encoded-jwt-secret-key>
+  GEMINI_API_KEY=$(echo -n "$GOOGLE_API_KEY" | base64)
+  JWT_SECRET_KEY: $(cat ../extras/jwt/jwt-secret.yaml | base64)
 ---
 apiVersion: apps/v1
 kind: Deployment
