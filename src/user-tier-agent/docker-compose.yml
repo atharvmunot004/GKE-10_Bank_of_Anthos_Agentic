@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  user-tier-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=DEBUG
+      - VERSION=v1.0.0
+      - GEMINI_API_KEY=${GOOGLE_API_KEY}
+      - ENVIRONMENT=test
+      - GEMINI_MODEL=gemini-2.5-flash
+      - LLM_TEMPERATURE=0.1
+      - LLM_MAX_TOKENS=4000
+      - LLM_TIMEOUT=30
+      - LEDGER_DB_URL=http://ledger-db:8080
+      - QUEUE_DB_URL=http://queue-db:8080
+      - PORTFOLIO_DB_URL=http://portfolio-db:8080
+      - REDIS_URL=redis://redis:6379
+      - CACHE_TTL=300
+      - DEFAULT_TIER1_PERCENTAGE=20
+      - DEFAULT_TIER2_PERCENTAGE=30
+      - DEFAULT_TIER3_PERCENTAGE=50
+      - DEFAULT_TRANSACTION_HISTORY_LIMIT=100
+      - CONNECTION_POOL_SIZE=10
+      - MAX_RETRIES=3
+      - RETRY_DELAY=1
+      - CIRCUIT_BREAKER_THRESHOLD=5
+      - CIRCUIT_BREAKER_TIMEOUT=60
+      - RATE_LIMIT_PER_MINUTE=60
+    depends_on:
+      - redis
+    networks:
+      - bank-of-anthos
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - bank-of-anthos
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mock external services for local development
+  mock-ledger-db:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./tests/mocks/ledger-db.conf:/etc/nginx/nginx.conf
+    networks:
+      - bank-of-anthos
+
+  mock-queue-db:
+    image: nginx:alpine
+    ports:
+      - "8082:80"
+    volumes:
+      - ./tests/mocks/queue-db.conf:/etc/nginx/nginx.conf
+    networks:
+      - bank-of-anthos
+
+  mock-portfolio-db:
+    image: nginx:alpine
+    ports:
+      - "8083:80"
+    volumes:
+      - ./tests/mocks/portfolio-db.conf:/etc/nginx/nginx.conf
+    networks:
+      - bank-of-anthos
+
+networks:
+  bank-of-anthos:
+    driver: bridge
+
+volumes:
+  redis_data:

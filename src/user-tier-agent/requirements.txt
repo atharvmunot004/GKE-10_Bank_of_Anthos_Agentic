@@ -1,0 +1,17 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+langchain>=0.1.0
+langchain-google-genai>=1.0.0
+httpx>=0.25.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+responses>=0.23.0
+locust>=2.17.0
+playwright>=1.40.0
+redis>=5.0.0
+tenacity>=8.2.0
+structlog>=23.2.0
+prometheus-client>=0.19.0

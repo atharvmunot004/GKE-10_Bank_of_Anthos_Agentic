@@ -1,0 +1,497 @@
+{
+  "created_by_ac_for_agent": {
+    "microservice_description": "An AI agent powered by gemini, that learns from the transaction history of a particular user and allots the money he / she wants to invest to or withdraw from into 3 tiers. The spread of money amongst these 3 tiers is extremely crucial for maintaining the financial stability of a user.",
+    "llm_and_framework": {
+      "model": "The agent's core reasoning is powered by a Google Gemini model (eg; gemini-1.5-pro), accessed via API",
+      "framework": "The agent is built and orchestrated using the Langchain open-source framework. Langchain manages the prompts, tool calls, and the overall execution loop"
+    },
+    "tools": {
+      "collect_user_transaction_history": {
+        "description": "Tool that collects a set of N transactions for a particular user (accountid) from the ledger-db (using the correct ledger-db API endpoints mentioned). After collecting, convert the transactions into a list of the following format (from the table named TRANSACTIONS):",
+        "parameters": {
+          "accountid": "string",
+          "N": "integer"
+        },
+        "return_format": [
+          "{TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP}",
+          "{TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP}",
+          "{TRANSACTION_ID, FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP}"
+        ],
+        "returns": "The list back to the agent"
+      },
+      "publish_allocation_to_queue": {
+        "description": "This tool takes the final calculated split and pushes it to queue-db",
+        "parameters": {
+          "uuid": "string",
+          "accountid": "string", 
+          "tier1": "number",
+          "tier2": "number",
+          "tier3": "number",
+          "purpose": "string (WITHDRAW or INVEST)"
+        },
+        "returns": "A success / failure status to the agent"
+      },
+      "add_transaction_to_portfolio_db": {
+        "description": "This tool connects to the user-portfolios-db and appends the result payload to the portfolio-transactions-tb table",
+        "parameters": {
+          "uuid": "string",
+          "accountid": "string",
+          "tier1": "number", 
+          "tier2": "number",
+          "tier3": "number",
+          "purpose": "string (WITHDRAW or INVEST)"
+        },
+        "returns": "A success/failure status to the agent"
+      }
+    },
+    "agent_prompt": "You are a 'Financial Tier Allocation Agent'. Your primary goal is to intelligently split a user's investment or withdrawal amount into three finanical tiers based on their transaction history.\nTier Definitions:\n    a. Tier 1: Money invested in this tier is the most liquid. It can be withdrawn almost instantaneously in conditions of urgent money requirements / emergencies. Money invested in this tier is invested with the purpose that a sudden unexpected requirement of money can be fulfilled.\n\n    b. Tier 2: Money invested in this tier is moderately liquid. It can be withdrawn within a timespan of atmost 15 days (a fortnite) for purposes of planned / monthly / recurring payments. Money is invested in this tier considering these steady / regular expenses.\n\n    c. Tier 3: Money invested in this tier is the least liquid and is meant for purposes of long term investments. The money invested in this tier is invested with the purpose of building a strong and steady wealth spanning over the lifetime of the user. Money may be withdrawn from this tier but it usually is meant to be non-volatile and meant to compound over a period of few years. Unless an unexpected expense of huge amount comes into the picture, money is not to be withdrawn from this tier.\nYour process would be as follows:\n1. You will recieve a request in the form of a JSON payload: {uuid, accountid, amount, purpose: 'WITHDRAW' / 'PURPOSE'} from either of the two microservices: a) invest-svc, b) withdraw-svc,\n2. First, you must decide how many transactions (N) you need to analyze to understand the user's spending habits (expense trends). A good starting point is 100, but adjust if you think more or less data is needed,\n3. call the collect_user_transaction_history tool with 'accountid' and chosen 'N',\n4. analyse the transaction history provided by the tool. Look for patterns: \n    a. frequent small purchases (daily life), \n    b. large monthly debits (rent/bills),\n    c. large infrequent credits / debits (investments / salary),\n    Additionally consider nuances, one example being: If a user's spending is erratic, then he / she would require more investment in tier1. Similarly, by the same logic during withdrawal, he / she would withdraw more from tier1 as well.\n5. Based on this analysis, calculate the split for the user's request amount into tier1, tier2, and tier3. Crucially, the sum of tier1, tier2, and tier3 must exactly equal the original 'amount' in the request. Provide your reasoning.\n6. Once you have the final allocation, call the publish_allocation_to_queue tool with all the required information.\n7. After successfully publishing to the queue, you must also save the transaction by calling the add_transaction_to_portfolio_db tool with the same information. This is a mandatory final step.\nError Handling: If any tool fails or returns an error, do not try again. Your task is to report the failure clearly. For example: 'The collect_user_transaction_history tool failed to connect to the database.'",
+    "technology_stack": {
+      "orchestration_framework": "LangChain (Python) is used to structure the agent",
+      "llm_integration": "The connection to the Gemini API is managed through the langchain-google-genai library",
+      "agent_runtime": "The agent's logic is executed using LangChain's AgentExecutor, which handles the reasoning and acting (ReAct) loop",
+      "tools": "The tools (collect_user_transaction_history, etc.) are implemented as standard Python functions and are made available to the agent using LangChain's @tool decorator"
+    },
+    "database_connection": {
+      "ledger_db": "connects with ledger-db using the API endpoint provided (and if other credentials are required)",
+      "queue_db": "connects with queue-db using the API endpoints provided (and if other credentials are required)"
+    },
+    "ordered_flow_of_execution": {
+      "step_1": "user-tier-agent receives input: {uuid, accountid, amount, purpose: 'WITHDRAW' / 'PURPOSE'}",
+      "step_2": "Agent (Gemini Brain with prompt) analyses input, decides it needs transaction history, chooses a suitable number of transaction required to learn user' spending habits (N)",
+      "step_3": "Tool Call (collect_user_transaction_history) connects to ledger-db, fetches the required data, returns a list of transactions",
+      "step_4": "Agent (Gemini Brain with prompt) receives a list of transaction, analyses patterns, calculates final split: {tier1: 1000, tier2: 2000, tier3: 7000}",
+      "step_5": "Tool Call (publish_allocation_to_queue) connects to queue-db, appends the payload {uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST'}, receives response from queue-db regarding status of appending the payload as an entry",
+      "step_6": "Agent (Gemini Brain with prompt) receives status from publish_allocation_to_queue tool regarding status of task, proceeds to the next mandatory steps",
+      "step_7": "Tool Call (add_transaction_to_portfolio_db) connects to user-portfolios-db and appends the payload {uuid, accountid, tier1, tier2, tier3, purpose: 'WITHDRAW' / 'INVEST'}, tool returns a success status",
+      "step_8": "Agent (Gemini Brain with prompt) receives final success status. The task is now complete."
+    },
+    "handling_edge_cases_and_errors": {
+      "new_users": "What if an accountid has zero transaction history? The agent needs a fallback plan, like suggesting a default split (e.g., 20% Tier 1, 30% Tier 2, 50% Tier 3) and informing the user.",
+      "tool_failures": "What happens if the ledger-db API is down and collect_user_transaction_history fails? The agent needs to be able to report the failure gracefully.",
+      "llm_hallucinations": "What if Gemini returns a malformed response or an invalid split (e.g., tiers that don't add up to the total amount)? Your application code needs to validate the agent's final output before publishing it.",
+      "invalid_input": "The microservice should validate the input payload before invoking the agent. Specifically, it should check that the amount is a positive number (greater than zero)."
+    }
+  },
+  "created_by_agent_for_agent": {
+    "microservice_architecture": {
+      "service_name": "user-tier-agent",
+      "description": "AI-powered financial tier allocation agent using Gemini LLM",
+      "tech_stack": {
+        "language": "Python 3.9+",
+        "framework": "FastAPI",
+        "llm_framework": "LangChain",
+        "llm_provider": "Google Gemini (gemini-1.5-pro)",
+        "library": "langchain-google-genai",
+        "orchestration": "LangChain AgentExecutor",
+        "database_clients": ["httpx", "requests"],
+        "testing": ["pytest", "pytest-asyncio", "httpx", "responses"],
+        "containerization": "Docker",
+        "deployment": "Kubernetes"
+      },
+      "dependencies": [
+        "fastapi>=0.104.0",
+        "uvicorn>=0.24.0",
+        "langchain>=0.1.0",
+        "langchain-google-genai>=1.0.0",
+        "httpx>=0.25.0",
+        "pydantic>=2.5.0",
+        "python-dotenv>=1.0.0",
+        "pytest>=7.4.0",
+        "pytest-asyncio>=0.21.0",
+        "responses>=0.23.0"
+      ]
+    },
+    "api_endpoints": {
+      "allocate_tiers": {
+        "path": "/allocate-tiers",
+        "method": "POST",
+        "description": "Main endpoint for tier allocation requests",
+        "request_body": {
+          "uuid": "string",
+          "accountid": "string",
+          "amount": "number",
+          "purpose": "string (WITHDRAW or INVEST)"
+        },
+        "response": {
+          "success": "boolean",
+          "allocation": {
+            "tier1": "number",
+            "tier2": "number", 
+            "tier3": "number"
+          },
+          "reasoning": "string",
+          "error": "string (if applicable)"
+        }
+      },
+      "health": {
+        "path": "/health",
+        "method": "GET",
+        "description": "Health check endpoint",
+        "response": {
+          "status": "healthy",
+          "timestamp": "ISO string"
+        }
+      }
+    },
+    "core_components": {
+      "agent_orchestrator": {
+        "class": "TierAllocationAgent",
+        "description": "Main agent class using LangChain AgentExecutor",
+        "responsibilities": [
+          "Initialize Gemini LLM connection",
+          "Manage agent execution flow",
+          "Handle tool orchestration",
+          "Process tier allocation logic"
+        ],
+        "configuration": {
+          "model_name": "gemini-1.5-pro",
+          "temperature": 0.1,
+          "max_tokens": 4000,
+          "timeout": 30
+        }
+      },
+      "tools": {
+        "collect_user_transaction_history": {
+          "class": "CollectTransactionHistoryTool",
+          "description": "Fetches user transaction history from ledger-db",
+          "implementation": {
+            "base_url": "Environment variable: LEDGER_DB_URL",
+            "endpoint": "/transactions/{accountid}",
+            "method": "GET",
+            "parameters": {
+              "limit": "N (number of transactions)",
+              "accountid": "string"
+            },
+            "error_handling": "Retry logic with exponential backoff"
+          }
+        },
+        "publish_allocation_to_queue": {
+          "class": "PublishAllocationTool", 
+          "description": "Publishes tier allocation to queue-db",
+          "implementation": {
+            "base_url": "Environment variable: QUEUE_DB_URL",
+            "endpoint": "/allocations",
+            "method": "POST",
+            "payload": {
+              "uuid": "string",
+              "accountid": "string",
+              "tier1": "number",
+              "tier2": "number",
+              "tier3": "number",
+              "purpose": "string"
+            }
+          }
+        },
+        "add_transaction_to_portfolio_db": {
+          "class": "AddPortfolioTransactionTool",
+          "description": "Saves allocation to portfolio database",
+          "implementation": {
+            "base_url": "Environment variable: PORTFOLIO_DB_URL",
+            "endpoint": "/portfolio-transactions",
+            "method": "POST",
+            "table": "portfolio-transactions-tb"
+          }
+        }
+      },
+      "validation": {
+        "class": "RequestValidator",
+        "description": "Validates incoming requests",
+        "rules": [
+          "amount must be positive number > 0",
+          "purpose must be WITHDRAW or INVEST",
+          "uuid must be valid UUID format",
+          "accountid must be non-empty string"
+        ]
+      },
+      "error_handler": {
+        "class": "ErrorHandler",
+        "description": "Centralized error handling",
+        "error_types": [
+          "ValidationError",
+          "ToolExecutionError", 
+          "LLMError",
+          "DatabaseConnectionError"
+        ]
+      }
+    },
+    "configuration": {
+      "environment_variables": {
+        "LEDGER_DB_URL": "URL for ledger database API",
+        "QUEUE_DB_URL": "URL for queue database API", 
+        "PORTFOLIO_DB_URL": "URL for portfolio database API",
+        "GEMINI_API_KEY": "Google Gemini API key (from GOOGLE_API_KEY environment variable)",
+        "LOG_LEVEL": "INFO/DEBUG/ERROR",
+        "PORT": "8080",
+        "HOST": "0.0.0.0"
+      },
+      "default_tier_allocation": {
+        "new_user_split": {
+          "tier1": 20,
+          "tier2": 30,
+          "tier3": 50
+        },
+        "default_transaction_history_limit": 100
+      }
+    },
+    "testing_strategy": {
+      "unit_tests": {
+        "framework": "pytest",
+        "coverage_target": 90,
+        "test_files": [
+          "test_tier_allocation_agent.py",
+          "test_tools.py",
+          "test_validation.py",
+          "test_error_handler.py"
+        ],
+        "test_cases": [
+          "test_agent_initialization",
+          "test_tool_execution_success",
+          "test_tool_execution_failure",
+          "test_request_validation",
+          "test_tier_calculation_logic",
+          "test_error_handling",
+          "test_default_allocation_for_new_users"
+        ],
+        "mocking": {
+          "llm_responses": "Mock Gemini API responses",
+          "database_calls": "Mock external API calls",
+          "tool_responses": "Mock tool execution results"
+        }
+      },
+      "integration_tests": {
+        "framework": "pytest + httpx",
+        "test_files": [
+          "test_integration_api.py",
+          "test_integration_tools.py"
+        ],
+        "test_cases": [
+          "test_complete_allocation_flow",
+          "test_tool_integration_with_external_apis",
+          "test_error_propagation",
+          "test_concurrent_requests"
+        ],
+        "test_environment": "Docker containers with mock services"
+      },
+      "load_tests": {
+        "framework": "locust",
+        "scenarios": [
+          "normal_load": "100 concurrent users",
+          "peak_load": "500 concurrent users", 
+          "stress_test": "1000+ concurrent users"
+        ],
+        "metrics": [
+          "response_time_p95",
+          "throughput_rps",
+          "error_rate",
+          "memory_usage",
+          "cpu_usage"
+        ],
+        "duration": "10 minutes per scenario"
+      },
+      "e2e_tests": {
+        "framework": "pytest + playwright",
+        "test_scenarios": [
+          "end_to_end_investment_flow",
+          "end_to_end_withdrawal_flow",
+          "error_scenarios",
+          "new_user_scenario"
+        ],
+        "test_environment": "Full Kubernetes deployment",
+        "dependencies": [
+          "ledger-db service",
+          "queue-db service", 
+          "portfolio-db service"
+        ]
+      },
+      "prompt_tests": {
+        "framework": "custom pytest fixtures",
+        "test_cases": [
+          "test_prompt_consistency",
+          "test_tier_calculation_accuracy",
+          "test_reasoning_quality",
+          "test_edge_case_handling"
+        ],
+        "validation": [
+          "tier sums equal total amount",
+          "reasonable tier proportions",
+          "clear reasoning provided",
+          "appropriate error messages"
+        ],
+        "test_data": [
+          "sample_transaction_histories",
+          "edge_case_scenarios",
+          "new_user_scenarios"
+        ]
+      }
+    },
+    "monitoring_and_observability": {
+      "logging": {
+        "structured_logging": "JSON format",
+        "log_levels": ["DEBUG", "INFO", "WARN", "ERROR"],
+        "log_context": [
+          "request_id",
+          "accountid", 
+          "operation_type",
+          "execution_time"
+        ]
+      },
+      "metrics": {
+        "business_metrics": [
+          "allocation_requests_total",
+          "allocation_success_rate",
+          "average_allocation_time",
+          "tier_distribution_histogram"
+        ],
+        "technical_metrics": [
+          "http_requests_total",
+          "http_request_duration",
+          "tool_execution_time",
+          "llm_token_usage"
+        ]
+      },
+      "health_checks": {
+        "liveness": "/health",
+        "readiness": "/ready",
+        "dependencies": [
+          "ledger-db connectivity",
+          "queue-db connectivity",
+          "portfolio-db connectivity",
+          "gemini-api connectivity"
+        ]
+      }
+    },
+    "security": {
+      "authentication": "JWT token validation",
+      "authorization": "Account ID validation",
+      "rate_limiting": "Per-account request limits",
+      "input_sanitization": "Request validation and sanitization",
+      "secrets_management": "Kubernetes secrets for API keys",
+      "network_security": "Internal service communication only"
+    },
+    "deployment": {
+      "containerization": {
+        "base_image": "python:3.9-slim",
+        "multi_stage_build": true,
+        "healthcheck": "HTTP GET /health",
+        "exposed_port": 8080
+      },
+      "kubernetes": {
+        "deployment": {
+          "replicas": 3,
+          "resources": {
+            "requests": {"cpu": "100m", "memory": "256Mi"},
+            "limits": {"cpu": "500m", "memory": "512Mi"}
+          }
+        },
+        "service": {
+          "type": "ClusterIP",
+          "port": 8080
+        },
+        "config_map": "Environment configuration",
+        "secrets": "API keys and credentials"
+      }
+    },
+    "inter_service_communication": {
+      "upstream_services": {
+        "invest-svc": {
+          "description": "Investment request service",
+          "communication": "HTTP POST to /allocate-tiers",
+          "payload": "{uuid, accountid, amount, purpose: 'INVEST'}"
+        },
+        "withdraw-svc": {
+          "description": "Withdrawal request service", 
+          "communication": "HTTP POST to /allocate-tiers",
+          "payload": "{uuid, accountid, amount, purpose: 'WITHDRAW'}"
+        }
+      },
+      "downstream_services": {
+        "ledger-db": {
+          "description": "Transaction history database",
+          "communication": "HTTP GET /transactions/{accountid}",
+          "authentication": "Service account token"
+        },
+        "queue-db": {
+          "description": "Allocation queue database",
+          "communication": "HTTP POST /allocations",
+          "authentication": "Service account token"
+        },
+        "portfolio-db": {
+          "description": "Portfolio transactions database",
+          "communication": "HTTP POST /portfolio-transactions",
+          "authentication": "Service account token"
+        }
+      },
+      "api_gateway": {
+        "routing": "Internal service mesh routing",
+        "load_balancing": "Round-robin with health checks",
+        "circuit_breaker": "Fail-fast on downstream service failures"
+      }
+    },
+    "development_workflow": {
+      "local_development": {
+        "setup": [
+          "Install Python dependencies",
+          "Configure environment variables",
+          "Start mock external services",
+          "Run tests"
+        ],
+        "tools": [
+          "docker-compose for local services",
+          "pytest for testing",
+          "black for code formatting",
+          "flake8 for linting"
+        ]
+      },
+      "ci_cd": {
+        "pipeline_stages": [
+          "Code quality checks",
+          "Unit tests with coverage",
+          "Integration tests",
+          "Security scanning",
+          "Build Docker image",
+          "Deploy to staging",
+          "E2E tests",
+          "Deploy to production"
+        ],
+        "quality_gates": [
+          "Test coverage >= 90%",
+          "No security vulnerabilities",
+          "All tests passing"
+        ]
+      }
+    },
+    "error_handling_patterns": {
+      "retry_logic": {
+        "external_api_calls": "Exponential backoff with jitter",
+        "max_retries": 3,
+        "retry_conditions": ["timeout", "connection_error", "5xx_status"]
+      },
+      "circuit_breaker": {
+        "failure_threshold": 5,
+        "recovery_timeout": 60,
+        "half_open_max_calls": 3
+      },
+      "graceful_degradation": {
+        "llm_failure": "Use cached/default allocations",
+        "database_failure": "Return error with retry suggestion",
+        "partial_failure": "Complete successful operations, report failures"
+      }
+    },
+    "performance_optimization": {
+      "caching": {
+        "transaction_history": "Redis cache with 5-minute TTL",
+        "user_profiles": "In-memory cache for frequently accessed users",
+        "llm_responses": "Cache similar allocation patterns"
+      },
+      "async_processing": {
+        "tool_execution": "Concurrent tool calls where possible",
+        "database_queries": "Async HTTP client for external calls"
+      },
+      "resource_management": {
+        "connection_pooling": "HTTP client connection reuse",
+        "memory_optimization": "Stream large transaction datasets",
+        "cpu_optimization": "Batch similar requests"
+      }
+    }
+  }
+}
