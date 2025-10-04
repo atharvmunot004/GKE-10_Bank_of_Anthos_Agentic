@@ -49,7 +49,7 @@ data:
   PORT: "8080"
   LOG_LEVEL: "INFO"
   VERSION: "v1.0.0"
-  GEMINI_MODEL: "gemini-1.5-pro"
+  GEMINI_MODEL: "gemini-2.5-flash"
   LLM_TEMPERATURE: "0.1"
   LLM_MAX_TOKENS: "4000"
   LLM_TIMEOUT: "30"
@@ -81,7 +81,7 @@ metadata:
   name: user-tier-agent-secrets
 type: Opaque
 data:
-  GEMINI_API_KEY: <base64-encoded-gemini-api-key>
+  GEMINI_API_KEY: <base64-encoded-google-api-key>
   JWT_SECRET_KEY: <base64-encoded-jwt-secret-key>
 ---
 apiVersion: apps/v1
