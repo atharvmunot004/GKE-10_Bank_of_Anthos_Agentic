@@ -38,7 +38,7 @@ class TierAllocationAgent:
         try:
             self.llm = ChatGoogleGenerativeAI(
                 model=settings.GEMINI_MODEL,
-                google_api_key=settings.GOOGLE_API_KEY,
+                google_api_key=settings.GEMINI_API_KEY,
                 temperature=settings.LLM_TEMPERATURE,
                 max_tokens=settings.LLM_MAX_TOKENS,
                 timeout=settings.LLM_TIMEOUT
