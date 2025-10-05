@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = 4000
     LLM_TIMEOUT: int = 30
     
-    # Database URLs
-    LEDGER_DB_URL: str = "http://ledger-db:8080"
-    QUEUE_DB_URL: str = "http://queue-db:8080"
-    PORTFOLIO_DB_URL: str = "http://portfolio-db:8080"
+    # Database Connection Strings
+    LEDGER_DB_URI: str = "postgresql://admin:password@ledger-db:5432/postgresdb"
+    QUEUE_DB_URI: str = "postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db"
+    PORTFOLIO_DB_URI: str = "postgresql://admin:password@user-portfolio-db:5432/portfoliodb"
     
     # Redis Configuration
     REDIS_URL: str = "redis://redis:6379"

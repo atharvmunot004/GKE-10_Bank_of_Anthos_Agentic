@@ -6,11 +6,11 @@ import json
 import asyncio
 from typing import Dict, Any, List, Optional
 import structlog
-import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 from langchain.tools import tool
 
 from app.core.config import settings
+from app.core.database import get_ledger_db_instance, get_queue_db_instance, get_portfolio_db_instance
 from app.models.schemas import Transaction
 
 logger = structlog.get_logger(__name__)
@@ -31,19 +31,13 @@ def collect_user_transaction_history(accountid: str, limit: int = 100) -> str:
     try:
         logger.info("Collecting transaction history", accountid=accountid, limit=limit)
         
-        # Make HTTP request to ledger-db
-        response = httpx.get(
-            f"{settings.LEDGER_DB_URL}/transactions/{accountid}",
-            params={"limit": limit},
-            timeout=30.0
-        )
-        response.raise_for_status()
-        
-        transactions_data = response.json()
+        # Query database directly for transactions
+        ledger_db = get_ledger_db_instance()
+        transactions_data = ledger_db.get_transactions(accountid, limit)
         
         # Convert to the expected format
         transactions = []
-        for tx in transactions_data.get("transactions", []):
+        for tx in transactions_data:
             transaction = {
                 "TRANSACTION_ID": tx.get("transaction_id", ""),
                 "FROM_ACCT": tx.get("from_acct", ""),
@@ -64,10 +58,6 @@ def collect_user_transaction_history(accountid: str, limit: int = 100) -> str:
         logger.info("Transaction history collected", count=len(transactions))
         return json.dumps(result)
         
-    except httpx.HTTPError as e:
-        error_msg = f"HTTP error collecting transaction history: {str(e)}"
-        logger.error(error_msg, accountid=accountid)
-        return json.dumps({"error": error_msg, "transactions": []})
     except Exception as e:
         error_msg = f"Error collecting transaction history: {str(e)}"
         logger.error(error_msg, accountid=accountid)
@@ -100,31 +90,13 @@ def publish_allocation_to_queue(
     try:
         logger.info("Publishing allocation to queue", uuid=uuid, accountid=accountid)
         
-        payload = {
-            "uuid": uuid,
-            "accountid": accountid,
-            "tier1": tier1,
-            "tier2": tier2,
-            "tier3": tier3,
-            "purpose": purpose
-        }
-        
-        response = httpx.post(
-            f"{settings.QUEUE_DB_URL}/allocations",
-            json=payload,
-            timeout=30.0
-        )
-        response.raise_for_status()
-        
-        result = response.json()
+        # Insert allocation directly into queue database
+        queue_db = get_queue_db_instance()
+        result = queue_db.publish_allocation(uuid, accountid, tier1, tier2, tier3, purpose)
         
         logger.info("Allocation published to queue successfully", uuid=uuid)
-        return json.dumps({"success": True, "result": result})
+        return json.dumps(result)
         
-    except httpx.HTTPError as e:
-        error_msg = f"HTTP error publishing to queue: {str(e)}"
-        logger.error(error_msg, uuid=uuid)
-        return json.dumps({"success": False, "error": error_msg})
     except Exception as e:
         error_msg = f"Error publishing to queue: {str(e)}"
         logger.error(error_msg, uuid=uuid)
@@ -157,32 +129,13 @@ def add_transaction_to_portfolio_db(
     try:
         logger.info("Adding transaction to portfolio DB", uuid=uuid, accountid=accountid)
         
-        payload = {
-            "uuid": uuid,
-            "accountid": accountid,
-            "tier1": tier1,
-            "tier2": tier2,
-            "tier3": tier3,
-            "purpose": purpose,
-            "table": "portfolio-transactions-tb"
-        }
-        
-        response = httpx.post(
-            f"{settings.PORTFOLIO_DB_URL}/portfolio-transactions",
-            json=payload,
-            timeout=30.0
-        )
-        response.raise_for_status()
-        
-        result = response.json()
+        # Insert transaction directly into portfolio database
+        portfolio_db = get_portfolio_db_instance()
+        result = portfolio_db.add_transaction(uuid, accountid, tier1, tier2, tier3, purpose)
         
         logger.info("Transaction added to portfolio DB successfully", uuid=uuid)
-        return json.dumps({"success": True, "result": result})
+        return json.dumps(result)
         
-    except httpx.HTTPError as e:
-        error_msg = f"HTTP error adding to portfolio DB: {str(e)}"
-        logger.error(error_msg, uuid=uuid)
-        return json.dumps({"success": False, "error": error_msg})
     except Exception as e:
         error_msg = f"Error adding to portfolio DB: {str(e)}"
         logger.error(error_msg, uuid=uuid)
