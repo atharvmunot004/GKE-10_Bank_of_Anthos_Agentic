@@ -130,6 +130,7 @@ spec:
             - secretRef:
                 name: user-tier-agent-secrets
           image: localhost:5000/user-tier-agent:v1.0.0
+          imagePullPolicy: Always
           name: user-tier-agent
           livenessProbe:
             httpGet:
