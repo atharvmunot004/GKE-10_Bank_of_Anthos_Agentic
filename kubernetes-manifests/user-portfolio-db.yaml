@@ -32,6 +32,7 @@ data:
   postgres-password: cG9ydGZvbGlvLXB3ZA==
   portfolio-admin-password: cG9ydGZvbGlvLXB3ZA==
 
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
