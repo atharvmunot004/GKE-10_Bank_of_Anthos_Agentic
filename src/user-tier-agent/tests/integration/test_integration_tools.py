@@ -17,35 +17,31 @@ from app.services.tools import (
 class TestIntegrationTools:
     """Integration tests for tools with external services"""
     
-    @patch('httpx.get')
-    def test_collect_user_transaction_history_integration(self, mock_get):
+    @patch('app.core.database.ledger_db.get_transactions')
+    def test_collect_user_transaction_history_integration(self, mock_get_transactions):
         """Test integration with ledger-db service"""
         # Mock successful response from ledger-db
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "transactions": [
-                {
-                    "transaction_id": "tx-001",
-                    "from_acct": "test-account-123",
-                    "to_acct": "merchant-001",
-                    "from_route": "123456789",
-                    "to_route": "987654321",
-                    "amount": 50.0,
-                    "timestamp": "2024-01-01T10:00:00Z"
-                },
-                {
-                    "transaction_id": "tx-002",
-                    "from_acct": "employer-001",
-                    "to_acct": "test-account-123",
-                    "from_route": "111111111",
-                    "to_route": "123456789",
-                    "amount": 5000.0,
-                    "timestamp": "2024-01-01T09:00:00Z"
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+        mock_transactions = [
+            {
+                "transaction_id": "tx-001",
+                "from_acct": "test-account-123",
+                "to_acct": "merchant-001",
+                "from_route": "123456789",
+                "to_route": "987654321",
+                "amount": 50.0,
+                "timestamp": "2024-01-01T10:00:00Z"
+            },
+            {
+                "transaction_id": "tx-002",
+                "from_acct": "employer-001",
+                "to_acct": "test-account-123",
+                "from_route": "111111111",
+                "to_route": "123456789",
+                "amount": 5000.0,
+                "timestamp": "2024-01-01T09:00:00Z"
+            }
+        ]
+        mock_get_transactions.return_value = mock_transactions
         
         # Test the tool
         result = collect_user_transaction_history.invoke({
@@ -60,17 +56,17 @@ class TestIntegrationTools:
         assert result_data["accountid"] == "test-account-123"
         assert result_data["count"] == 2
         
-        # Verify the HTTP call
-        mock_get.assert_called_once()
-        call_args = mock_get.call_args
-        assert "test-account-123" in call_args[0][0]  # URL contains account ID
-        assert call_args[1]["params"]["limit"] == 100
+        # Verify the database call
+        mock_get_transactions.assert_called_once()
+        call_args = mock_get_transactions.call_args
+        assert call_args[0][0] == "test-account-123"  # accountid parameter
+        assert call_args[0][1] == 100  # limit parameter
     
-    @patch('httpx.get')
-    def test_collect_user_transaction_history_service_down(self, mock_get):
+    @patch('app.core.database.ledger_db.get_transactions')
+    def test_collect_user_transaction_history_service_down(self, mock_get_transactions):
         """Test integration when ledger-db service is down"""
         # Mock service unavailable
-        mock_get.side_effect = httpx.ConnectError("Connection refused")
+        mock_get_transactions.side_effect = Exception("Connection refused")
         
         result = collect_user_transaction_history.invoke({
     "accountid": "test-account-123",
@@ -82,11 +78,11 @@ class TestIntegrationTools:
         assert "transactions" in result_data
         assert result_data["transactions"] == []
     
-    @patch('httpx.get')
-    def test_collect_user_transaction_history_timeout(self, mock_get):
+    @patch('app.core.database.ledger_db.get_transactions')
+    def test_collect_user_transaction_history_timeout(self, mock_get_transactions):
         """Test integration with timeout"""
         # Mock timeout
-        mock_get.side_effect = httpx.TimeoutException("Request timed out")
+        mock_get_transactions.side_effect = Exception("Request timed out")
         
         result = collect_user_transaction_history.invoke({
     "accountid": "test-account-123",
@@ -97,18 +93,15 @@ class TestIntegrationTools:
         assert "error" in result_data
         assert "timed out" in result_data["error"].lower()
     
-    @patch('httpx.post')
-    def test_publish_allocation_to_queue_integration(self, mock_post):
+    @patch('app.core.database.queue_db.publish_allocation')
+    def test_publish_allocation_to_queue_integration(self, mock_publish_allocation):
         """Test integration with queue-db service"""
         # Mock successful response from queue-db
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "status": "success",
-            "id": "queue-123",
-            "timestamp": "2024-01-01T10:00:00Z"
+        mock_publish_allocation.return_value = {
+            "success": True,
+            "allocation_id": "queue-123",
+            "uuid": "test-uuid-123"
         }
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
         
         # Test the tool
         result = publish_allocation_to_queue.invoke({
@@ -123,34 +116,23 @@ class TestIntegrationTools:
         # Verify the result
         result_data = json.loads(result)
         assert result_data["success"] is True
-        assert "result" in result_data
-        assert result_data["result"]["status"] == "success"
+        assert "allocation_id" in result_data
         
-        # Verify the HTTP call
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert "/allocations" in call_args[0][0]  # URL contains endpoint
-        
-        payload = call_args[1]["json"]
-        assert payload["uuid"] == "test-uuid-123"
-        assert payload["accountid"] == "test-account-123"
-        assert payload["tier1"] == 1000.0
-        assert payload["tier2"] == 2000.0
-        assert payload["tier3"] == 7000.0
-        assert payload["purpose"] == "INVEST"
+        # Verify the database call
+        mock_publish_allocation.assert_called_once()
+        call_args = mock_publish_allocation.call_args
+        assert call_args[0][0] == "test-uuid-123"  # uuid parameter
+        assert call_args[0][1] == "test-account-123"  # accountid parameter
+        assert call_args[0][2] == 1000.0  # tier1 parameter
+        assert call_args[0][3] == 2000.0  # tier2 parameter
+        assert call_args[0][4] == 7000.0  # tier3 parameter
+        assert call_args[0][5] == "INVEST"  # purpose parameter
     
-    @patch('httpx.post')
-    def test_publish_allocation_to_queue_service_error(self, mock_post):
+    @patch('app.core.database.queue_db.publish_allocation')
+    def test_publish_allocation_to_queue_service_error(self, mock_publish_allocation):
         """Test integration when queue-db service returns error"""
         # Mock service error
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Internal Server Error",
-            request=Mock(),
-            response=mock_response
-        )
-        mock_post.return_value = mock_response
+        mock_publish_allocation.side_effect = Exception("Internal Server Error")
         
         result = publish_allocation_to_queue.invoke({
             "uuid": "test-uuid-123",
@@ -166,19 +148,15 @@ class TestIntegrationTools:
         assert "error" in result_data
         assert "Internal Server Error" in result_data["error"]
     
-    @patch('httpx.post')
-    def test_add_transaction_to_portfolio_db_integration(self, mock_post):
+    @patch('app.core.database.portfolio_db.add_transaction')
+    def test_add_transaction_to_portfolio_db_integration(self, mock_add_transaction):
         """Test integration with portfolio-db service"""
         # Mock successful response from portfolio-db
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "status": "success",
-            "id": "portfolio-123",
-            "table": "portfolio-transactions-tb",
-            "timestamp": "2024-01-01T10:00:00Z"
+        mock_add_transaction.return_value = {
+            "success": True,
+            "transaction_id": "portfolio-123",
+            "uuid": "test-uuid-123"
         }
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
         
         # Test the tool
         result = add_transaction_to_portfolio_db.invoke({
@@ -193,28 +171,23 @@ class TestIntegrationTools:
         # Verify the result
         result_data = json.loads(result)
         assert result_data["success"] is True
-        assert "result" in result_data
-        assert result_data["result"]["status"] == "success"
+        assert "transaction_id" in result_data
         
-        # Verify the HTTP call
-        mock_post.assert_called_once()
-        call_args = mock_post.call_args
-        assert "/portfolio-transactions" in call_args[0][0]  # URL contains endpoint
-        
-        payload = call_args[1]["json"]
-        assert payload["uuid"] == "test-uuid-123"
-        assert payload["accountid"] == "test-account-123"
-        assert payload["tier1"] == 1000.0
-        assert payload["tier2"] == 2000.0
-        assert payload["tier3"] == 7000.0
-        assert payload["purpose"] == "INVEST"
-        assert payload["table"] == "portfolio-transactions-tb"
+        # Verify the database call
+        mock_add_transaction.assert_called_once()
+        call_args = mock_add_transaction.call_args
+        assert call_args[0][0] == "test-uuid-123"  # uuid parameter
+        assert call_args[0][1] == "test-account-123"  # accountid parameter
+        assert call_args[0][2] == 1000.0  # tier1 parameter
+        assert call_args[0][3] == 2000.0  # tier2 parameter
+        assert call_args[0][4] == 7000.0  # tier3 parameter
+        assert call_args[0][5] == "INVEST"  # purpose parameter
     
-    @patch('httpx.post')
-    def test_add_transaction_to_portfolio_db_service_unavailable(self, mock_post):
+    @patch('app.core.database.portfolio_db.add_transaction')
+    def test_add_transaction_to_portfolio_db_service_unavailable(self, mock_add_transaction):
         """Test integration when portfolio-db service is unavailable"""
         # Mock service unavailable
-        mock_post.side_effect = httpx.ConnectError("Connection refused")
+        mock_add_transaction.side_effect = Exception("Connection refused")
         
         result = add_transaction_to_portfolio_db.invoke({
             "uuid": "test-uuid-123",
@@ -230,19 +203,15 @@ class TestIntegrationTools:
         assert "error" in result_data
         assert "Connection refused" in result_data["error"]
     
-    @patch('httpx.get')
-    def test_tool_retry_mechanism(self, mock_get):
+    @patch('app.core.database.ledger_db.get_transactions')
+    def test_tool_retry_mechanism(self, mock_get_transactions):
         """Test tool retry mechanism with exponential backoff"""
         # Mock first two calls to fail, third to succeed
-        mock_responses = [
-            Mock(side_effect=httpx.ConnectError("Connection refused")),
-            Mock(side_effect=httpx.ConnectError("Connection refused")),
-            Mock()
+        mock_get_transactions.side_effect = [
+            Exception("Connection refused"),
+            Exception("Connection refused"),
+            []  # Success case returns empty list
         ]
-        mock_responses[2].json.return_value = {"transactions": []}
-        mock_responses[2].raise_for_status.return_value = None
-        
-        mock_get.side_effect = mock_responses
         
         # This should eventually succeed after retries
         result = collect_user_transaction_history.invoke({
@@ -252,13 +221,13 @@ class TestIntegrationTools:
         
         result_data = json.loads(result)
         assert "transactions" in result_data
-        assert mock_get.call_count >= 1  # At least one call was made
+        assert mock_get_transactions.call_count >= 1  # At least one call was made
     
-    @patch('httpx.get')
-    def test_tool_circuit_breaker_pattern(self, mock_get):
+    @patch('app.core.database.ledger_db.get_transactions')
+    def test_tool_circuit_breaker_pattern(self, mock_get_transactions):
         """Test circuit breaker pattern for failing services"""
         # Mock consistent failures
-        mock_get.side_effect = httpx.ConnectError("Service unavailable")
+        mock_get_transactions.side_effect = Exception("Service unavailable")
         
         # Multiple calls should all fail gracefully
         results = []
@@ -275,8 +244,8 @@ class TestIntegrationTools:
     
     def test_tool_error_propagation(self):
         """Test that tool errors are properly propagated"""
-        with patch('httpx.get') as mock_get:
-            mock_get.side_effect = Exception("Unexpected error")
+        with patch('app.core.database.ledger_db.get_transactions') as mock_get_transactions:
+            mock_get_transactions.side_effect = Exception("Unexpected error")
             
             result = collect_user_transaction_history.invoke({
     "accountid": "test-account-123",

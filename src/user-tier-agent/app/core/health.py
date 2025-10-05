@@ -18,9 +18,9 @@ class HealthChecker:
     
     def __init__(self):
         self.dependencies = {
-            "ledger-db": settings.LEDGER_DB_URL,
-            "queue-db": settings.QUEUE_DB_URL,
-            "portfolio-db": settings.PORTFOLIO_DB_URL,
+            "ledger-db": settings.LEDGER_DB_URI,
+            "queue-db": settings.QUEUE_DB_URI,
+            "portfolio-db": settings.PORTFOLIO_DB_URI,
             "gemini-api": "https://generativelanguage.googleapis.com"
         }
     

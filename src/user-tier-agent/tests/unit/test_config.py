@@ -160,16 +160,16 @@ class TestSettings:
             assert settings.RATE_LIMIT_PER_MINUTE == 60
     
     def test_database_urls_default(self):
-        """Test default database URLs"""
+        """Test default database URIs"""
         with patch.dict('os.environ', {
-            'GEMINI_API_KEY': 'test-api-key',
+            'GOOGLE_API_KEY': 'test-api-key',
             'LOG_LEVEL': 'INFO'
         }):
             settings = Settings()
             
-            assert settings.LEDGER_DB_URL == 'http://test-ledger-db:8080'
-            assert settings.QUEUE_DB_URL == 'http://test-queue-db:8080'
-            assert settings.PORTFOLIO_DB_URL == 'http://test-portfolio-db:8080'
+            assert settings.LEDGER_DB_URI == 'postgresql://admin:password@ledger-db:5432/postgresdb'
+            assert settings.QUEUE_DB_URI == 'postgresql://queue-admin:queue-pwd@queue-db:5432/queue-db'
+            assert settings.PORTFOLIO_DB_URI == 'postgresql://admin:password@user-portfolio-db:5432/portfoliodb'
     
     def test_redis_configuration_default(self):
         """Test default Redis configuration"""
