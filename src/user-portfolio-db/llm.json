@@ -1,0 +1,408 @@
+{
+  "service_name": "user-portfolio-db",
+  "service_type": "database",
+  "description": "PostgreSQL database service for managing user portfolios with tier-based fund allocation in the Bank of Anthos application",
+  "version": "1.0.0",
+  "database": {
+    "type": "PostgreSQL",
+    "version": "13+",
+    "host": "user-portfolio-db",
+    "port": 5432,
+    "database_name": "user-portfolio-db",
+    "username": "portfolio-admin",
+    "password": "portfolio-pwd"
+  },
+  "schema": {
+    "tables": {
+      "user_portfolios": {
+        "description": "Stores user portfolio information with tier-based fund allocation",
+        "columns": {
+          "accountid": {
+            "type": "VARCHAR(10)",
+            "constraints": ["NOT NULL"],
+            "description": "User account identifier"
+          },
+          "currency": {
+            "type": "TEXT",
+            "constraints": ["NOT NULL", "DEFAULT 'USD'"],
+            "description": "Portfolio currency"
+          },
+          "tier1_allocation": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Allocation amount for tier 1 fund"
+          },
+          "tier2_allocation": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Allocation amount for tier 2 fund"
+          },
+          "tier3_allocation": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Allocation amount for tier 3 fund"
+          },
+          "total_allocation": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Total allocation across all tiers"
+          },
+          "tier1_value": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Current value of tier 1 investments"
+          },
+          "tier2_value": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Current value of tier 2 investments"
+          },
+          "tier3_value": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Current value of tier 3 investments"
+          },
+          "total_value": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Total portfolio value"
+          },
+          "created_at": {
+            "type": "TIMESTAMPTZ",
+            "constraints": ["NOT NULL", "DEFAULT NOW()"],
+            "description": "Portfolio creation timestamp"
+          },
+          "updated_at": {
+            "type": "TIMESTAMPTZ",
+            "constraints": ["NOT NULL", "DEFAULT NOW()"],
+            "description": "Last update timestamp"
+          }
+        },
+        "constraints": [
+          "CHECK (tier1_allocation + tier2_allocation + tier3_allocation = total_allocation)",
+          "CHECK (tier1_value + tier2_value + tier3_value = total_value)"
+        ],
+        "indexes": [
+          "idx_user_portfolios_accountid ON (accountid)",
+          "idx_user_portfolios_created_at ON (created_at)"
+        ]
+      },
+      "portfolio_transactions": {
+        "description": "Tracks portfolio allocation changes and investment/withdrawal transactions",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "constraints": ["PRIMARY KEY", "DEFAULT gen_random_uuid()"],
+            "description": "Unique transaction identifier"
+          },
+          "accountid": {
+            "type": "VARCHAR(10)",
+            "constraints": ["NOT NULL", "REFERENCES user_portfolios(accountid) ON DELETE CASCADE"],
+            "description": "User account identifier"
+          },
+          "transaction_type": {
+            "type": "VARCHAR(20)",
+            "constraints": ["NOT NULL", "CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL'))"],
+            "description": "Type of transaction"
+          },
+          "tier1_change": {
+            "type": "NUMERIC(5,2)",
+            "constraints": ["DEFAULT 0"],
+            "description": "Change in tier 1 allocation"
+          },
+          "tier2_change": {
+            "type": "NUMERIC(5,2)",
+            "constraints": ["DEFAULT 0"],
+            "description": "Change in tier 2 allocation"
+          },
+          "tier3_change": {
+            "type": "NUMERIC(5,2)",
+            "constraints": ["DEFAULT 0"],
+            "description": "Change in tier 3 allocation"
+          },
+          "total_amount": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL"],
+            "description": "Total transaction amount"
+          },
+          "fees": {
+            "type": "NUMERIC(10,2)",
+            "constraints": ["DEFAULT 0"],
+            "description": "Transaction fees"
+          },
+          "status": {
+            "type": "VARCHAR(20)",
+            "constraints": ["NOT NULL", "DEFAULT 'PENDING'", "CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED'))"],
+            "description": "Transaction status"
+          },
+          "created_at": {
+            "type": "TIMESTAMPTZ",
+            "constraints": ["NOT NULL", "DEFAULT NOW()"],
+            "description": "Transaction creation timestamp"
+          },
+          "updated_at": {
+            "type": "TIMESTAMPTZ",
+            "constraints": ["NOT NULL", "DEFAULT NOW()"],
+            "description": "Last update timestamp"
+          }
+        },
+        "constraints": [
+          "CHECK (tier1_change + tier2_change + tier3_change = total_amount)"
+        ],
+        "indexes": [
+          "idx_portfolio_transactions_accountid ON (accountid)",
+          "idx_portfolio_transactions_type ON (transaction_type)",
+          "idx_portfolio_transactions_status ON (status)",
+          "idx_portfolio_transactions_created_at ON (created_at)"
+        ]
+      },
+      "portfolio_analytics": {
+        "description": "Stores calculated portfolio metrics and analytics",
+        "columns": {
+          "id": {
+            "type": "UUID",
+            "constraints": ["PRIMARY KEY", "DEFAULT gen_random_uuid()"],
+            "description": "Unique analytics record identifier"
+          },
+          "accountid": {
+            "type": "VARCHAR(10)",
+            "constraints": ["NOT NULL", "REFERENCES user_portfolios(accountid) ON DELETE CASCADE"],
+            "description": "User account identifier"
+          },
+          "total_value": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Total portfolio value"
+          },
+          "total_invested": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Total amount invested"
+          },
+          "total_gain_loss": {
+            "type": "NUMERIC(15,2)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Total gain/loss amount"
+          },
+          "gain_loss_percentage": {
+            "type": "NUMERIC(8,4)",
+            "constraints": ["NOT NULL", "DEFAULT 0"],
+            "description": "Gain/loss percentage"
+          },
+          "risk_score": {
+            "type": "NUMERIC(5,4)",
+            "constraints": ["DEFAULT 0"],
+            "description": "Portfolio risk score"
+          },
+          "calculated_at": {
+            "type": "TIMESTAMPTZ",
+            "constraints": ["NOT NULL", "DEFAULT NOW()"],
+            "description": "Analytics calculation timestamp"
+          }
+        },
+        "indexes": [
+          "idx_portfolio_analytics_accountid ON (accountid)",
+          "idx_portfolio_analytics_calculated_at ON (calculated_at)"
+        ]
+      },
+      "users": {
+        "description": "User account information (may be created by accounts-db)",
+        "columns": {
+          "accountid": {
+            "type": "CHAR(10)",
+            "constraints": ["PRIMARY KEY"],
+            "description": "User account identifier"
+          },
+          "username": {
+            "type": "VARCHAR(64)",
+            "constraints": ["UNIQUE", "NOT NULL"],
+            "description": "Username"
+          },
+          "passhash": {
+            "type": "BYTEA",
+            "constraints": ["NOT NULL"],
+            "description": "Password hash"
+          },
+          "firstname": {
+            "type": "VARCHAR(64)",
+            "constraints": ["NOT NULL"],
+            "description": "First name"
+          },
+          "lastname": {
+            "type": "VARCHAR(64)",
+            "constraints": ["NOT NULL"],
+            "description": "Last name"
+          },
+          "birthday": {
+            "type": "DATE",
+            "constraints": ["NOT NULL"],
+            "description": "Birth date"
+          },
+          "timezone": {
+            "type": "VARCHAR(8)",
+            "constraints": ["NOT NULL"],
+            "description": "Timezone"
+          },
+          "address": {
+            "type": "VARCHAR(64)",
+            "constraints": ["NOT NULL"],
+            "description": "Address"
+          },
+          "state": {
+            "type": "CHAR(2)",
+            "constraints": ["NOT NULL"],
+            "description": "State code"
+          },
+          "zip": {
+            "type": "VARCHAR(5)",
+            "constraints": ["NOT NULL"],
+            "description": "ZIP code"
+          },
+          "ssn": {
+            "type": "CHAR(11)",
+            "constraints": ["NOT NULL"],
+            "description": "Social Security Number"
+          }
+        }
+      }
+    },
+    "views": {
+      "portfolio_summary": {
+        "description": "View providing portfolio summary information",
+        "columns": [
+          "accountid",
+          "total_value",
+          "currency",
+          "tier1_allocation",
+          "tier2_allocation",
+          "tier3_allocation",
+          "tier1_value",
+          "tier2_value",
+          "tier3_value",
+          "created_at",
+          "updated_at"
+        ]
+      }
+    },
+    "functions": {
+      "update_updated_at_column": {
+        "description": "Trigger function to automatically update updated_at timestamp",
+        "returns": "TRIGGER",
+        "language": "plpgsql"
+      }
+    },
+    "triggers": {
+      "update_user_portfolios_updated_at": {
+        "table": "user_portfolios",
+        "event": "BEFORE UPDATE",
+        "function": "update_updated_at_column"
+      },
+      "update_portfolio_transactions_updated_at": {
+        "table": "portfolio_transactions",
+        "event": "BEFORE UPDATE",
+        "function": "update_updated_at_column"
+      }
+    }
+  },
+  "fund_tiers": {
+    "tier1": {
+      "name": "TIER1",
+      "description": "First tier fund - conservative investment option"
+    },
+    "tier2": {
+      "name": "TIER2", 
+      "description": "Second tier fund - moderate investment option"
+    },
+    "tier3": {
+      "name": "TIER3",
+      "description": "Third tier fund - aggressive investment option"
+    }
+  },
+  "common_queries": {
+    "get_user_portfolio": {
+      "description": "Retrieve user portfolio information",
+      "sql": "SELECT accountid, currency, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation, tier1_value, tier2_value, tier3_value, total_value, created_at, updated_at FROM user_portfolios WHERE accountid = %s"
+    },
+    "get_portfolio_transactions": {
+      "description": "Get paginated transaction history for a user",
+      "sql": "SELECT id, transaction_type, tier1_change, tier2_change, tier3_change, total_amount, fees, status, created_at, updated_at FROM portfolio_transactions WHERE accountid = %s ORDER BY created_at DESC LIMIT %s OFFSET %s"
+    },
+    "calculate_total_invested": {
+      "description": "Calculate total amount invested by a user",
+      "sql": "SELECT COALESCE(SUM(total_amount), 0) as total_invested FROM portfolio_transactions WHERE accountid = %s AND transaction_type = 'INVEST' AND status = 'COMPLETED'"
+    },
+    "get_portfolio_summary": {
+      "description": "Get portfolio summary using the view",
+      "sql": "SELECT * FROM portfolio_summary WHERE accountid = %s"
+    }
+  },
+  "integrations": {
+    "portfolio_reader_svc": {
+      "purpose": "Read-only access to portfolio data",
+      "endpoints": [
+        "GET /api/v1/portfolio/{user_id}",
+        "GET /api/v1/portfolio/{user_id}/transactions", 
+        "GET /api/v1/portfolio/{user_id}/summary"
+      ],
+      "relationship": "primary_interface"
+    },
+    "invest_svc": {
+      "purpose": "Investment processing and portfolio updates",
+      "relationship": "writes_to_database"
+    },
+    "investment_manager_svc": {
+      "purpose": "Orchestrates investment operations",
+      "relationship": "uses_portfolio_reader"
+    },
+    "consistency_manager_svc": {
+      "purpose": "Maintains consistency between queue-db and user-portfolio-db",
+      "relationship": "syncs_transaction_status"
+    }
+  },
+  "data_flow": {
+    "investment_flow": [
+      "User initiates investment through frontend",
+      "investment-manager-svc calls invest-svc",
+      "invest-svc updates user_portfolios and creates portfolio_transactions",
+      "portfolio-reader-svc provides read access to updated data"
+    ],
+    "withdrawal_flow": [
+      "User initiates withdrawal through frontend",
+      "investment-manager-svc calls withdraw-svc", 
+      "withdraw-svc updates user_portfolios and creates portfolio_transactions",
+      "portfolio-reader-svc provides read access to updated data"
+    ],
+    "consistency_management": [
+      "queue-db processes investment/withdrawal requests",
+      "consistency-manager-svc syncs status updates to portfolio_transactions",
+      "Portfolio values updated based on completed transactions"
+    ]
+  },
+  "deployment": {
+    "environments": {
+      "development": "kubectl apply -k k8s/overlays/development",
+      "staging": "kubectl apply -k k8s/overlays/staging", 
+      "production": "kubectl apply -k k8s/overlays/production"
+    },
+    "config_maps": [
+      "user-portfolio-db-config",
+      "environment-config",
+      "demo-data-config"
+    ]
+  },
+  "security": {
+    "authentication": "No JWT authentication required (database service)",
+    "access_control": "Access controlled through microservice layer",
+    "credentials": "Managed via environment variables"
+  },
+  "monitoring": {
+    "health_checks": "Database health checks via portfolio-reader-svc",
+    "audit_trails": "Transaction logging for audit trails",
+    "performance": "Performance monitoring for query optimization"
+  },
+  "extensions": [
+    "uuid-ossp",
+    "pgcrypto", 
+    "pg_trgm"
+  ]
+}
