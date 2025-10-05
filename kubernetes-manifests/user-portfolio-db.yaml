@@ -1,0 +1,344 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-portfolio-db-config
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+data:
+  POSTGRES_DB: "user-portfolio-db"
+  POSTGRES_USER: "portfolio-admin"
+  POSTGRES_PASSWORD: "portfolio-pwd"
+  POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+  DB_HOST: "localhost"
+  DB_PORT: "5432"
+  DB_NAME: "user-portfolio-db"
+  DB_USER: "portfolio-admin"
+  DB_PASSWORD: "portfolio-pwd"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-portfolio-db-secret
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+type: Opaque
+data:
+  # Base64 encoded passwords (portfolio-pwd)
+  postgres-password: cG9ydGZvbGlvLXB3ZA==
+  portfolio-admin-password: cG9ydGZvbGlvLXB3ZA==
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: user-portfolio-db-pvc
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-portfolio-db
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-portfolio-db
+  template:
+    metadata:
+      labels:
+        app: user-portfolio-db
+        component: database
+        tier: backend
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: user-portfolio-db-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: user-portfolio-db-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: user-portfolio-db-secret
+              key: postgres-password
+        - name: POSTGRES_INITDB_ARGS
+          valueFrom:
+            configMapKeyRef:
+              name: user-portfolio-db-config
+              key: POSTGRES_INITDB_ARGS
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U portfolio-admin -d user-portfolio-db -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U portfolio-admin -d user-portfolio-db -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: user-portfolio-db-pvc
+      - name: init-scripts
+        configMap:
+          name: user-portfolio-db-init-scripts
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-portfolio-db
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+    tier: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: user-portfolio-db
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-portfolio-db-nodeport
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+    tier: backend
+spec:
+  type: NodePort
+  ports:
+  - port: 5432
+    targetPort: 5432
+    nodePort: 30432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: user-portfolio-db
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-portfolio-db-init-scripts
+  namespace: default
+  labels:
+    app: user-portfolio-db
+    component: database
+data:
+  0-user-portfolio-schema.sql: |
+    
+
+    -- Enable required extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    -- Create users table (if not exists, as it might be created by accounts-db)
+    CREATE TABLE IF NOT EXISTS users (
+      accountid CHAR(10) PRIMARY KEY,
+      username VARCHAR(64) UNIQUE NOT NULL,
+      passhash BYTEA NOT NULL,
+      firstname VARCHAR(64) NOT NULL,
+      lastname VARCHAR(64) NOT NULL,
+      birthday DATE NOT NULL,
+      timezone VARCHAR(8) NOT NULL,
+      address VARCHAR(64) NOT NULL,
+      state CHAR(2) NOT NULL,
+      zip VARCHAR(5) NOT NULL,
+      ssn CHAR(11) NOT NULL
+    );
+
+    -- Create user_portfolios table for tier-based fund allocation
+    CREATE TABLE IF NOT EXISTS user_portfolios (
+      accountid VARCHAR(10) PRIMARY KEY,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      tier1_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tier2_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tier3_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tier1_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tier2_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+      tier3_value NUMERIC(15,2) NOT NULL DEFAULT 0, 
+      total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT check_tier_allocation CHECK (tier1_allocation + tier2_allocation + tier3_allocation = total_allocation),
+      CONSTRAINT check_tier_value CHECK (tier1_value + tier2_value + tier3_value = total_value)
+    );
+
+    -- Create indexes for user_portfolios table
+    CREATE INDEX IF NOT EXISTS idx_user_portfolios_created_at ON user_portfolios (created_at);
+
+    -- Create portfolio_transactions table for fund allocation changes
+    CREATE TABLE IF NOT EXISTS portfolio_transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(accountid) ON DELETE CASCADE,
+      transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL')),
+      tier1_change NUMERIC(5,2) DEFAULT 0,
+      tier2_change NUMERIC(5,2) DEFAULT 0,
+      tier3_change NUMERIC(5,2) DEFAULT 0,
+      total_amount NUMERIC(15,2) NOT NULL,
+      fees NUMERIC(10,2) DEFAULT 0,
+      status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT check_tier_change CHECK (tier1_change + tier2_change + tier3_change = total_amount)
+    );
+
+    -- Create indexes for portfolio_transactions table
+    CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_accountid ON portfolio_transactions (accountid);
+    CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_type ON portfolio_transactions (transaction_type);
+    CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_status ON portfolio_transactions (status);
+    CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_created_at ON portfolio_transactions (created_at);
+
+    -- Create portfolio_analytics table for storing calculated metrics
+    CREATE TABLE IF NOT EXISTS portfolio_analytics (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(accountid) ON DELETE CASCADE,
+      total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_invested NUMERIC(15,2) NOT NULL DEFAULT 0,
+      total_gain_loss NUMERIC(15,2) NOT NULL DEFAULT 0,
+      gain_loss_percentage NUMERIC(8,4) NOT NULL DEFAULT 0,
+      risk_score NUMERIC(5,4) DEFAULT 0,
+      calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Create indexes for portfolio_analytics table
+    CREATE INDEX IF NOT EXISTS idx_portfolio_analytics_accountid ON portfolio_analytics (accountid);
+    CREATE INDEX IF NOT EXISTS idx_portfolio_analytics_calculated_at ON portfolio_analytics (calculated_at);
+
+    -- Create functions for updating timestamps
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+
+    -- Create triggers for automatic timestamp updates
+    CREATE TRIGGER update_user_portfolios_updated_at BEFORE UPDATE ON user_portfolios
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    CREATE TRIGGER update_portfolio_transactions_updated_at BEFORE UPDATE ON portfolio_transactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    -- Create a view for portfolio summary
+    CREATE OR REPLACE VIEW portfolio_summary AS
+    SELECT 
+        up.accountid,
+        up.total_value,
+        up.currency,
+        up.tier1_allocation,
+        up.tier2_allocation,
+        up.tier3_allocation,
+        up.tier1_value,
+        up.tier2_value,
+        up.tier3_value,
+        up.created_at,
+        up.updated_at
+    FROM user_portfolios up;
+  1-load-testdata.sql: |
+    /*
+     * Test data for user-portfolio-db
+     * Copyright 2024 Google LLC
+     */
+
+    -- Insert test users (if users table exists)
+    INSERT INTO users (accountid, username, passhash, firstname, lastname, birthday, timezone, address, state, zip, ssn)
+    VALUES 
+        ('1000000001', 'testuser1', E'\\x1234', 'Test', 'User1', '1990-01-01', 'UTC', '123 Main St', 'CA', '90210', '123-45-6789'),
+        ('1000000002', 'testuser2', E'\\x1234', 'Test', 'User2', '1990-01-01', 'UTC', '123 Main St', 'CA', '90210', '123-45-6790'),
+        ('1000000003', 'testuser3', E'\\x1234', 'Test', 'User3', '1990-01-01', 'UTC', '123 Main St', 'CA', '90210', '123-45-6791')
+    ON CONFLICT (accountid) DO NOTHING;
+
+    -- Insert test portfolios
+    INSERT INTO user_portfolios (accountid, currency, tier1_allocation, tier2_allocation, tier3_allocation, total_allocation,
+                               tier1_value, tier2_value, tier3_value, total_value)
+    VALUES 
+        ('1000000001', 'USD', 40.00, 30.00, 30.00, 100.00, 4000.00, 3000.00, 3000.00, 10000.00),
+        ('1000000002', 'USD', 50.00, 25.00, 25.00, 100.00, 5000.00, 2500.00, 2500.00, 10000.00),
+        ('1000000003', 'USD', 60.00, 20.00, 20.00, 100.00, 6000.00, 2000.00, 2000.00, 10000.00)
+    ON CONFLICT (accountid) DO NOTHING;
+
+    -- Insert test transactions
+    INSERT INTO portfolio_transactions (accountid, transaction_type, tier1_change, tier2_change, tier3_change, total_amount, fees, status)
+    VALUES 
+        ('1000000001', 'INVEST', 40.00, 30.00, 30.00, 100.00, 0.00, 'COMPLETED'),
+        ('1000000002', 'INVEST', 50.00, 25.00, 25.00, 100.00, 0.00, 'COMPLETED'),
+        ('1000000003', 'INVEST', 60.00, 20.00, 20.00, 100.00, 0.00, 'COMPLETED'),
+        ('1000000001', 'WITHDRAWAL', -10.00, -5.00, -5.00, -20.00, 1.00, 'COMPLETED')
+    ON CONFLICT DO NOTHING;
+
+    -- Insert test analytics
+    INSERT INTO portfolio_analytics (accountid, total_value, total_invested, total_gain_loss, gain_loss_percentage, risk_score)
+    VALUES 
+        ('1000000001', 10000.00, 10000.00, 0.00, 0.0000, 0.5000),
+        ('1000000002', 10000.00, 10000.00, 0.00, 0.0000, 0.4000),
+        ('1000000003', 10000.00, 10000.00, 0.00, 0.0000, 0.6000)
+    ON CONFLICT (id) DO NOTHING;

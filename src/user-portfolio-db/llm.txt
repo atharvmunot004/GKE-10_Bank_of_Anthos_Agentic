@@ -1,0 +1,173 @@
+tables
+|-> user-portfolio-table:
+|   |-> {
+|           accountid VARCHAR(10) NOT NULL,
+|           currency TEXT NOT NULL DEFAULT 'USD',
+|           tier1_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           tier2_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           tier3_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           total_allocation NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           tier1_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           tier2_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           tier3_value NUMERIC(15,2) NOT NULL DEFAULT 0, 
+|           total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+|           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+|           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+|           CONSTRAINT check_tier_allocation CHECK (tier1_allocation + tier2_allocation + tier3_allocation = total_allocation),
+|           CONSTRAINT check_tier_value CHECK (tier1_value + tier2_value + tier3_value = total_value)
+|       }
+|-> portfolio-transactions-table:
+    |-> {
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(id) ON DELETE CASCADE,
+            transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL')),
+            tier1_change NUMERIC(5,2) DEFAULT 0,
+            tier2_change NUMERIC(5,2) DEFAULT 0,
+            tier3_change NUMERIC(5,2) DEFAULT 0,
+            total_amount NUMERIC(15,2) NOT NULL,
+            fees NUMERIC(10,2) DEFAULT 0,
+            status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT check_tier_change CHECK (tier1_change + tier2_change + tier3_change = total_amount)
+        }
+---created by Chinmay and Atharv for agent    
+-----------
+---created by agent for agent
+# User Portfolio Database Service - LLM Documentation
+
+## Overview
+The `user-portfolio-db` service is a PostgreSQL database that manages user portfolios with tier-based fund allocation for the Bank of Anthos application. It supports three-tier investment allocation with transaction tracking and analytics.
+
+## Database Schema
+
+### Tables
+
+#### user_portfolios Table
+```sql
+CREATE TABLE IF NOT EXISTS user_portfolios (
+  accountid VARCHAR(10) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  tier1_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier1_allocation >= 0 AND tier1_allocation <= 100),
+  tier2_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier2_allocation >= 0 AND tier2_allocation <= 100),
+  tier3_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (tier3_allocation >= 0 AND tier3_allocation <= 100),
+  total_allocation NUMERIC(5,2) NOT NULL DEFAULT 0 CHECK (total_allocation >= 0 AND total_allocation <= 100),
+  tier1_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+  tier2_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+  tier3_value NUMERIC(15,2) NOT NULL DEFAULT 0, 
+  total_value NUMERIC(15,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT check_tier_allocation CHECK (tier1_allocation + tier2_allocation + tier3_allocation = 100)
+);
+```
+
+#### portfolio_transactions Table
+```sql
+CREATE TABLE IF NOT EXISTS portfolio_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  accountid VARCHAR(10) NOT NULL REFERENCES user_portfolios(accountid) ON DELETE CASCADE,
+  transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('INVEST', 'WITHDRAWAL')),
+  tier1_change NUMERIC(5,2) DEFAULT 0,
+  tier2_change NUMERIC(5,2) DEFAULT 0,
+  tier3_change NUMERIC(5,2) DEFAULT 0,
+  total_amount NUMERIC(15,2) NOT NULL,
+  fees NUMERIC(10,2) DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED', 'CANCELLED')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+## Portfolio Reader Service Integration
+
+### Service Access
+The database is accessed through the `portfolio-reader-svc` microservice which provides read-only access to portfolio data.
+
+### API Endpoints
+- `GET /api/v1/portfolio/{user_id}` - Get portfolio with recent transactions
+- `GET /api/v1/portfolio/{user_id}/transactions` - Get paginated transaction history  
+- `GET /api/v1/portfolio/{user_id}/summary` - Get portfolio summary with analytics
+
+### Connection Details
+- **Host**: `user-portfolio-db`
+- **Port**: `5432`
+- **Database**: `user-portfolio-db`
+- **Username**: `portfolio-admin`
+- **Password**: `portfolio-pwd`
+
+## Common SQL Queries
+
+### Get User Portfolio
+```sql
+SELECT accountid, currency, tier1_allocation, tier2_allocation, tier3_allocation, 
+       total_allocation, tier1_value, tier2_value, tier3_value, total_value,
+       created_at, updated_at
+FROM user_portfolios 
+WHERE accountid = %s;
+```
+
+### Get Portfolio Transactions
+```sql
+SELECT id, transaction_type, tier1_change, tier2_change, tier3_change,
+       total_amount, fees, status, created_at, updated_at
+FROM portfolio_transactions 
+WHERE accountid = %s 
+ORDER BY created_at DESC 
+LIMIT %s OFFSET %s;
+```
+
+### Calculate Total Invested
+```sql
+SELECT COALESCE(SUM(total_amount), 0) as total_invested
+FROM portfolio_transactions 
+WHERE accountid = %s AND transaction_type = 'INVEST' AND status = 'COMPLETED';
+```
+
+## Related Services
+
+### Portfolio Reader Service (portfolio-reader-svc)
+- **Purpose**: Read-only access to portfolio data
+- **Endpoints**: Portfolio retrieval, transaction history, analytics
+- **Integration**: Primary interface for portfolio data access
+
+### Invest Service (invest-svc)
+- **Purpose**: Investment processing and portfolio updates
+- **Integration**: Updates user_portfolios and creates portfolio_transactions
+
+### Investment Manager Service (investment-manager-svc)
+- **Purpose**: Orchestrates investment operations
+- **Integration**: Uses portfolio-reader-svc for data retrieval
+
+### Consistency Manager Service (consistency-manager-svc)
+- **Purpose**: Maintains consistency between queue-db and user-portfolio-db
+- **Integration**: Updates portfolio transactions based on queue status
+
+## Data Flow
+
+### Investment Flow
+1. User initiates investment through frontend
+2. investment-manager-svc calls invest-svc
+3. invest-svc updates user_portfolios and creates portfolio_transactions
+4. portfolio-reader-svc provides read access to updated data
+
+### Withdrawal Flow
+1. User initiates withdrawal through frontend
+2. investment-manager-svc calls withdraw-svc
+3. withdraw-svc updates user_portfolios and creates portfolio_transactions
+4. portfolio-reader-svc provides read access to updated data
+
+### Consistency Management
+1. queue-db processes investment/withdrawal requests
+2. consistency-manager-svc syncs status updates to portfolio_transactions
+3. Portfolio values updated based on completed transactions
+
+## Security Notes
+- No JWT authentication required (database service)
+- Access controlled through microservice layer
+- Connection credentials managed via environment variables
+
+## Monitoring
+- Database health checks via portfolio-reader-svc
+- Transaction logging for audit trails
+- Performance monitoring for query optimization
